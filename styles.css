@@ -5,6 +5,7 @@
   --note: #4C9AFF; --note-bg: #12233A; --note-line: #2E4A6E; --note-ink: #8AB8FF;
   --flow: #F5A524; --flow-bg: #1F1A10; --flow-line: #5C4515; --flow-ink: #F5C46B;
   --act: #A78BFA; --act-bg: #1A1626; --act-line: #3F3466; --act-ink: #C4B5FD;
+  --itp: #2DD4A7; --itp-bg: #0F201C; --itp-line: #1F4D42; --itp-ink: #7FE3C6;
   --ok: #3FB950; --ok-bg: #0F1F14; --ok-line: #24502F; --bad: #F85149;
   --mono: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace;
   --safe-b: env(safe-area-inset-bottom, 0px); --safe-t: env(safe-area-inset-top, 0px);
@@ -130,7 +131,7 @@ mark { background: var(--flow-line); color: #FFE2A8; border-radius: 2px; padding
 .list .lt { flex: 1; display: flex; flex-direction: column; gap: 2px; }
 .list .lt b { font-size: 15px; font-weight: 600; }
 .list .lt span { font-size: 13px; color: var(--muted); }
-.tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); grid-auto-flow: column; gap: 8px; }
 .tile { padding: 10px; border-radius: 3px; display: flex; flex-direction: column; gap: 2px; }
 .tile b { font-size: 22px; } .tile span { font-size: 12px; color: var(--muted); }
 .tile.n { background: var(--note-bg); } .tile.n b { color: var(--note-ink); }
@@ -182,3 +183,13 @@ main.in-back { animation: in-back .22s cubic-bezier(.2, .8, .2, 1); }
 .pin-x { flex: none; width: 44px; border: 0; background: transparent; color: var(--muted); font-size: 22px; display: inline-flex; align-items: center; justify-content: center; }
 .pin-x.del { color: var(--bad); }
 .comp .pin { animation: line-in .18s cubic-bezier(.2, .8, .2, 1); }
+
+/* ITP evidence (1.6): its own colour, next to note, flow-on and action */
+.dot-i { color: var(--itp); }
+.e.itp { border-color: var(--itp-line); border-top-color: var(--itp); }
+.itp .e-k { color: var(--itp-ink); }
+.as.itp { background: var(--itp); }
+.pin.itp { border-color: var(--itp-line); border-left-color: var(--itp); background: var(--itp-bg); }
+.pin.itp .e-k { color: var(--itp-ink); }
+.chip.itp { border-color: var(--itp-line); color: var(--itp-ink); background: var(--itp-bg); font-family: var(--mono); font-weight: 700; }
+.tile.i { background: var(--itp-bg); } .tile.i b { color: var(--itp); }

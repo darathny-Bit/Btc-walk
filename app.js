@@ -6,7 +6,7 @@
    (⋮ › Load project). No server, nothing sent anywhere else. */
 'use strict';
 (function () {
-  var VERSION = '1.5';
+  var VERSION = '1.6';
   var FORMAT = 'btcwalk', PFORMAT = 'btcproject';
 
   // ---------- the demo job (generic) ----------
@@ -15,8 +15,10 @@
     project: { id: 'demo-dragon', code: 'DRAGON', name: 'Dragon WWTP (demo)' },
     people: [{ name: 'Sam Rivers', handle: 'SR', team: true }, { name: 'Alex Kerr', handle: 'AK', team: true }, { name: 'Nikau Hale', handle: 'NH', team: true }, { name: 'Jo Tamati', handle: 'JT', team: true }, { name: 'Pat Lee', handle: 'PL', team: false }],
     areas: [
-      { name: 'Inlet works', itps: [{ code: 'ITP-01', title: 'Inlet screens' }, { code: 'ITP-02', title: 'Inlet pumps' }] },
-      { name: 'SBR 1', itps: [{ code: 'ITP-05', title: 'SBR 1 diffusers' }, { code: 'ITP-06', title: 'SBR 1 decanter' }] },
+      { name: 'Inlet works', itps: [{ code: 'ITP-01', title: 'Inlet screens', lines: [{ no: '2.1', text: 'Screen frame set out' }, { no: '2.2', text: 'Screen installed and levelled' }, { no: '3.1', text: 'Wash press wired' }] },
+        { code: 'ITP-02', title: 'Inlet pumps', lines: [{ no: '2.1', text: 'Pump plinths grouted' }, { no: '2.2', text: 'Pumps set and aligned' }, { no: '3.1', text: 'Discharge pipework pressure test' }] }] },
+      { name: 'SBR 1', itps: [{ code: 'ITP-05', title: 'SBR 1 diffusers', lines: [{ no: '2.1', text: 'Grid levelled' }, { no: '2.2', text: 'Clean water leak test' }] },
+        { code: 'ITP-06', title: 'SBR 1 decanter', lines: [{ no: '3.1', text: 'Decanter bracket installed' }, { no: '3.2', text: 'Hold-down bolts torqued' }, { no: '3.3', text: 'Limit switches set' }] }] },
       { name: 'Blowers', itps: [{ code: 'ITP-08', title: 'Blowers' }] },
       { name: 'Chemical dosing', itps: [{ code: 'ITP-09', title: 'Dosing skid' }] }],
     flowons: [{ no: 'FO-001', area: 'SBR 1', itp: 'ITP-06', desc: 'Decanter bracket moved 40 mm east to clear the handrail', action: 'mech shop drawing and limit switch to suit' }]
@@ -97,9 +99,19 @@
       if (!mm[3] && ymd(d) < base) d.setFullYear(y + 1); return ymd(d); });
     return { due: due, text: t.replace(/\s{2,}/g, ' ').trim() };
   }
+  // A word and a full stop at the start says what it is (1.6): note. action. flow. ITP. (the word is dropped). ITP is
+  // evidence for an ITP line: @ITP-06 3.2 files it on that line in Build; plain @ITP (or no ITP) leaves it to sort on the
+  // PC. @flow-on is the same as flow.
+  var LEAD = /^(note|action|flow(?:-?on)?|itp)\.(?=\s|$)\s*/i;
+  function lineOf(code, no) { var it = itpByCode(code); return it && (it.lines || []).filter(function (l) { return l.no === no; })[0] || null; }
+  function itpByCode(code) { var k = key(code), hit = null; (S.proj.areas || []).forEach(function (a) { (a.itps || []).forEach(function (i) { if (!hit && key(i.code) === k) hit = i; }); }); return hit; }
   function parse(raw, day) {
-    var text = String(raw || '').trim(), out = { type: 'note', text: '', action: '', who: '', area: '', itp: '', tag: '', priority: '', due: '', move: null, notFound: [] };
+    var text = String(raw || '').trim(), out = { type: 'note', text: '', action: '', who: '', area: '', itp: '', tag: '', line: '', priority: '', due: '', move: null, notFound: [], forced: '' };
     if (!text) return out;
+    var ld = LEAD.exec(text);
+    if (ld) { var w = ld[1].toLowerCase(); out.forced = w === 'itp' ? 'itp' : /^flow/.test(w) ? 'flowon' : w; text = text.slice(ld[0].length); }
+    text = text.replace(/(^|\s)@flow-?on\b/i, function () { if (!out.forced) out.forced = 'flowon'; return ' '; }).trim();
+    text = text.replace(/(^|\s)@itp(?=\s|$)/i, function () { if (!out.forced) out.forced = 'itp'; return ' '; }).trim();
     var mv = /^at\s+(.+)$/i.exec(text);
     if (mv) { var p0 = placeAt('@' + mv[1].trim(), 0); if (p0 && p0.len >= mv[1].trim().length - 1) { out.move = p0.place; return out; } }
     // @ who or where
@@ -107,7 +119,11 @@
     while ((i = text.indexOf('@', i)) >= 0) {
       if (i > 0 && /\S/.test(text.charAt(i - 1))) { i++; continue; }
       var pl = placeAt(text, i);
-      if (pl && !place) { place = pl.place; text = (text.slice(0, i) + text.slice(i + 1 + pl.len)).replace(/\s{2,}/g, ' '); continue; }
+      if (pl && !place) {
+        place = pl.place; var cut = 1 + pl.len;
+        if (place.kind === 'itp') { var ln = /^\s+(\d+(?:\.\d+)*)(?=[\s,;]|$)/.exec(text.slice(i + cut)); if (ln) { out.line = ln[1]; cut += ln[0].length; if (!out.forced) out.forced = 'itp'; } }
+        text = (text.slice(0, i) + text.slice(i + cut)).replace(/\s{2,}/g, ' '); continue;
+      }
       var m = /^@(\S+)/.exec(text.slice(i)), who = m ? person(m[1].replace(/[,.;:]+$/, '')) : null;
       if (who) { people.push(who); text = (text.slice(0, i) + text.slice(i + m[0].length)).replace(/\s{2,}/g, ' '); continue; }
       if (m) out.notFound.push(m[1]);
@@ -117,17 +133,19 @@
     if (pm) { out.priority = 'P' + pm[2]; text = (text.slice(0, pm.index) + text.slice(pm.index + pm[0].length)).replace(/\s{2,}/g, ' '); }
     var d = parseDue(text, day || today()); text = d.text; out.due = d.due;
     text = text.trim();
-    var sep = SEP.exec(text), lead = /^(flow-?on|bridge)\b[:\s]*/i.exec(text);
-    if (sep) { out.type = 'flowon'; out.text = text.slice(0, sep.index).trim(); out.action = text.slice(sep.index + sep[0].length).trim(); }
+    var sep = out.forced && out.forced !== 'flowon' ? null : SEP.exec(text), lead = out.forced ? null : /^(flow-?on|bridge)\b[:\s]*/i.exec(text);
+    if (out.forced && out.forced !== 'flowon') { out.type = out.forced; out.text = text; }
+    else if (sep) { out.type = 'flowon'; out.text = text.slice(0, sep.index).trim(); out.action = text.slice(sep.index + sep[0].length).trim(); }
     else if (lead) { out.type = 'flowon'; out.text = text.slice(lead[0].length).trim(); }
-    else { out.text = text; if (people.length || out.priority || out.due || VERBS.test(text)) out.type = 'action'; }
+    else { out.text = text; if (out.forced) out.type = out.forced; else if (people.length || out.priority || out.due || VERBS.test(text)) out.type = 'action'; }
+    if (out.forced === 'flowon') out.type = 'flowon';
     if (out.type === 'flowon' && lead && sep) out.text = out.text.replace(/^(flow-?on|bridge)\b[:\s]*/i, '');
     out.who = people.length ? people[0].handle : '';
     if (place) { out.area = place.area || ''; out.itp = place.itp || ''; out.tag = place.tag || ''; out.there = true; }
     return out;
   }
-  var TYPE = { note: 'Note', flowon: 'Flow-on', action: 'Action' };
-  var CYCLE = ['note', 'flowon', 'action'];
+  var TYPE = { note: 'Note', flowon: 'Flow-on', action: 'Action', itp: 'ITP' };
+  var CYCLE = ['note', 'flowon', 'action', 'itp'];
 
   // ---------- days ----------
   function daysOf() {
@@ -135,8 +153,8 @@
     S.entries.forEach(function (e) { (m[e.day] = m[e.day] || []).push(e); });
     return Object.keys(m).sort().reverse().map(function (d) { var es = m[d].sort(function (a, b) { return a.time < b.time ? -1 : 1; }); return { day: d, entries: es, unshipped: es.some(function (e) { return !e.shipped; }) }; });
   }
-  function counts(es) { var c = { note: 0, flowon: 0, action: 0, photo: 0 }; es.forEach(function (e) { c[e.type] = (c[e.type] || 0) + 1; if (e.photo) c.photo++; }); return c; }
-  function dotsRow(c) { return '<span class="dots-row"><span><span class="dot-n">●</span> ' + c.note + '</span><span><span class="dot-f">●</span> ' + c.flowon + '</span><span><span class="dot-a">●</span> ' + c.action + '</span>' + (c.photo ? '<span class="muted">▣ ' + c.photo + '</span>' : '') + '</span>'; }
+  function counts(es) { var c = { note: 0, flowon: 0, action: 0, itp: 0, photo: 0 }; es.forEach(function (e) { c[e.type] = (c[e.type] || 0) + 1; if (e.photo) c.photo++; }); return c; }
+  function dotsRow(c) { return '<span class="dots-row"><span><span class="dot-n">●</span> ' + c.note + '</span><span><span class="dot-f">●</span> ' + c.flowon + '</span><span><span class="dot-a">●</span> ' + c.action + '</span>' + (c.itp ? '<span><span class="dot-i">●</span> ' + c.itp + '</span>' : '') + (c.photo ? '<span class="muted">▣ ' + c.photo + '</span>' : '') + '</span>'; }
   var FLAG = '<span class="flag"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1F1A10" stroke-width="2.6" aria-hidden="true"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg>NOT SHIPPED</span>';
 
   function renderDays() {
@@ -161,11 +179,12 @@
   }
 
   // ---------- a day's chat ----------
+  function itpHead(e) { return 'ITP · ' + (e.itp && e.line ? esc(e.itp) + ' ' + esc(e.line) : 'TO SORT ON THE PC'); }
   function entryHtml(e, hl) {
     var mark = function (s) { s = esc(s); if (!hl) return s; var q = hl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); return s.replace(new RegExp('(' + esc(q) + ')', 'ig'), '<mark>$1</mark>'); };
     var where = e.itp ? (e.area ? e.area + ' · ' : '') + e.itp : e.area || e.tag || '';
     var who = e.who ? '@' + e.who + ' · ' : '';
-    var head = e.type === 'action' ? 'ACTION · ' + (e.who ? '@' + esc(e.who) : 'you') + (e.priority ? ' · ' + esc(e.priority) : '') : TYPE[e.type].toUpperCase();
+    var head = e.type === 'action' ? 'ACTION · ' + (e.who ? '@' + esc(e.who) : 'you') + (e.priority ? ' · ' + esc(e.priority) : '') : e.type === 'itp' ? itpHead(e) : TYPE[e.type].toUpperCase();
     var meta = [where ? '<span class="' + (e.there ? 'there' : '') + '">' + mark(where) + '</span>' : '', e.type !== 'action' && who ? esc(who.replace(' · ', '')) : '', e.due ? 'due ' + esc(dayLabel(e.due)) : '', e.edited ? 'edited' : '', (e.notFound || []).length ? '<span class="nf">@' + esc(e.notFound.join(' @')) + ' not found</span>' : ''].filter(Boolean).join(' · ');
     var ed = S.edit === e.id;
     return '<button type="button" class="e ' + e.type + (ed ? ' ed' : '') + (S.fresh === e.id ? ' new' : '') + '" data-e="' + esc(e.id) + '"><span class="e-h"><span class="e-k">' + (ed ? PEN : '') + head + '</span><span>' + hm(e.time) + (e.shipped ? ' ✓' : '') + '</span></span>' +
@@ -178,7 +197,7 @@
   // with a pencil, the bin and × on it. No editing row.
   function pinHtml() {
     var e = S.entries.filter(function (x) { return x.id === S.edit; })[0]; if (!e) return '';
-    var head = e.type === 'action' ? 'ACTION' + (e.who ? ' · @' + esc(e.who) : '') : TYPE[e.type].toUpperCase();
+    var head = e.type === 'action' ? 'ACTION' + (e.who ? ' · @' + esc(e.who) : '') : e.type === 'itp' ? itpHead(e) : TYPE[e.type].toUpperCase();
     return '<div class="pin ' + e.type + '"><div class="pin-b"><span class="e-k">' + PEN + 'EDITING ' + head + ' · ' + hm(e.time) + '</span>' +
       '<span class="pin-t">' + esc(e.text || '') + (e.type === 'flowon' && e.action ? ' → ' + esc(e.action) : '') + '</span></div>' +
       '<button type="button" class="pin-x del" data-act="delete" aria-label="Delete this line">' + BIN + '</button>' +
@@ -216,9 +235,13 @@
   function reads() {
     var b = $('box'), r = $('reads'), sg = $('sug'); if (!b || !r) return;
     var v = b.value, p = parse(v, S.day);
-    // @ suggestions: people, areas, ITPs
-    var at = /(?:^|\s)@([^@]*)$/.exec(v.slice(0, b.selectionStart || v.length));
-    if (at && at[1].length <= 24 && !/\s{2}/.test(at[1])) {
+    // @ITP-06 then a space: that ITP's lines (1.6)
+    var before = v.slice(0, b.selectionStart || v.length), lm = /(?:^|\s)@(\S+)\s+(\d[\d.]*)?$/.exec(before), li = lm ? itpByCode(lm[1]) : null;
+    var at = /(?:^|\s)@([^@]*)$/.exec(before);
+    if (li && (li.lines || []).length && !lineOf(li.code, lm[2] || '')) {
+      var lk = lm[2] || '';
+      sg.innerHTML = li.lines.filter(function (l) { return !lk || l.no.indexOf(lk) === 0; }).slice(0, 14).map(function (l) { return '<button type="button" data-line="' + esc(l.no) + '">' + esc(l.no) + '<small>' + esc(l.text) + '</small></button>'; }).join('');
+    } else if (at && at[1].length <= 24 && !/\s{2}/.test(at[1])) {
       var k = key(at[1]);
       var list = (S.proj.people || []).map(function (x) { return { put: x.handle, label: x.name, sub: '@' + x.handle }; }).concat(places().map(function (x) { return { put: x.name, label: x.name, sub: x.kind === 'itp' ? x.area : x.kind }; }))
         .filter(function (x) { return !k || key(x.put).indexOf(k) === 0 || key(x.label).indexOf(k) === 0; }).slice(0, 12);
@@ -233,12 +256,15 @@
       (where ? '<span class="chip warn">@ ' + esc(where) + '</span>' : '') + (type === 'action' ? '<span class="chip">' + (p.who ? '@' + esc(p.who) : 'you') + '</span>' : p.who ? '<span class="chip">@' + esc(p.who) + '</span>' : '') +
       (p.priority ? '<span class="chip">' + p.priority + '</span>' : '') + (p.due ? '<span class="chip">due ' + esc(dayLabel(p.due)) + '</span>' : '') +
       (type === 'flowon' ? (p.action ? '<span class="chip">→ ' + esc(p.action) + '</span>' : '<span class="chip warn">no action yet: add ; and what next</span>') : '') +
-      (p.notFound.length ? '<span class="chip nf">@' + esc(p.notFound.join(' @')) + ' not found</span>' : '');
+      (p.notFound.length ? '<span class="chip nf">@' + esc(p.notFound.join(' @')) + ' not found</span>' : '') +
+      (type === 'itp' ? (p.itp && p.line ? '<span class="chip">' + esc(p.line) + ' ' + esc((lineOf(p.itp, p.line) || {}).text || '') + '</span>'
+        : (S.lastLine && !p.itp ? '<button type="button" class="chip itp" data-act="lastline">＋ ' + esc(S.lastLine.itp + ' ' + S.lastLine.line) + '</button>' : '') + '<span class="chip warn">' + (p.itp ? 'no line: ' : '') + 'sorted on the PC</span>') : '');
   }
   function matches(e, q) {
     if (q === 'flow-ons' || q === 'flowons' || q === 'flow-on') return e.type === 'flowon';
     if (q === 'actions' || q === 'action') return e.type === 'action';
     if (q === 'notes' || q === 'note') return e.type === 'note';
+    if (q === 'itp' || q === 'itps') return e.type === 'itp';
     if (/^@/.test(q)) return key(e.who) === key(q.slice(1)) || key(e.area) === key(q.slice(1)) || key(e.itp) === key(q.slice(1));
     return [e.text, e.action, e.area, e.itp, e.tag, e.who, e.raw].join(' ').toLowerCase().indexOf(q) >= 0;
   }
@@ -251,10 +277,11 @@
     var where = p.there ? {} : S.loc ? { area: S.loc.area || '', itp: S.loc.itp || '', tag: S.loc.tag || '' } : {};
     if (S.edit) {
       var e = S.entries.filter(function (x) { return x.id === S.edit; })[0];
-      if (e) { Object.assign(e, { raw: raw, type: type, text: p.text || (e.photo ? 'Photo' : ''), action: p.action, who: p.who, priority: p.priority, due: p.due, notFound: p.notFound, edited: true, shipped: false, there: !!p.there }, p.there ? { area: p.area, itp: p.itp, tag: p.tag } : {}); if (S.photo) e.photo = S.photo; await putEntry(e); }
+      if (e) { Object.assign(e, { raw: raw, type: type, line: p.line, text: p.text || (e.photo ? 'Photo' : ''), action: p.action, who: p.who, priority: p.priority, due: p.due, notFound: p.notFound, edited: true, shipped: false, there: !!p.there }, p.there ? { area: p.area, itp: p.itp, tag: p.tag } : {}); if (S.photo) e.photo = S.photo; await putEntry(e); }
       S.edit = null; S.photo = null; S.as = null; renderDay(); toast('Saved'); return;
     }
-    var en = { id: uid(), proj: S.proj.project.id, day: S.day, time: now, raw: raw, type: type, text: p.text || (S.photo ? 'Photo' : ''), action: p.action, who: p.who, area: p.there ? p.area : where.area || '', itp: p.there ? p.itp : where.itp || '', tag: p.there ? p.tag : where.tag || '',
+    if (type === 'itp' && p.itp && p.line) { S.lastLine = { itp: p.itp, line: p.line }; kvSet('lastLine:' + S.proj.project.id, S.lastLine); }
+    var en = { id: uid(), proj: S.proj.project.id, day: S.day, time: now, raw: raw, type: type, line: p.line, text: p.text || (S.photo ? 'Photo' : ''), action: p.action, who: p.who, area: p.there ? p.area : where.area || '', itp: p.there ? p.itp : where.itp || '', tag: p.there ? p.tag : where.tag || '',
       location: S.loc ? S.loc.name : '', priority: p.priority, due: p.due, photo: S.photo || '', edited: false, shipped: false, notFound: p.notFound, there: !!p.there };
     S.entries.push(en); await putEntry(en);
     S.draft = ''; S.photo = null; S.as = null; S.fresh = en.id; buzz(8); renderDay(); S.fresh = null;
@@ -284,11 +311,11 @@
     var byDay = {}; es.forEach(function (e) { (byDay[e.day] = byDay[e.day] || []).push(e); });
     var days = Object.keys(byDay).sort().reverse(), un = {}; daysOf().forEach(function (d) { un[d.day] = d.unshipped; });
     main.innerHTML = '<div class="findbar" style="background:var(--panel);border-color:var(--line)"><button type="button" class="icon" data-act="back" aria-label="Back to days"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button><input type="search" id="find-all" placeholder="Search every day" value="' + esc(S.findAll) + '" aria-label="Search every day"></div>' +
-      '<div class="filters">' + [['all', 'All'], ['note', 'Notes'], ['flowon', 'Flow-ons'], ['action', 'Actions']].map(function (x) { return '<button type="button" data-filter="' + x[0] + '"' + (f === x[0] ? ' class="on"' : '') + '>' + x[1] + '</button>'; }).join('') + '</div>' +
+      '<div class="filters">' + [['all', 'All'], ['note', 'Notes'], ['flowon', 'Flow-ons'], ['action', 'Actions'], ['itp', 'ITP']].map(function (x) { return '<button type="button" data-filter="' + x[0] + '"' + (f === x[0] ? ' class="on"' : '') + '>' + x[1] + '</button>'; }).join('') + '</div>' +
       '<div class="scroll"><div class="pad" style="gap:0">' + (q || f !== 'all' ? '<div class="kick" style="padding-bottom:6px">' + es.length + ' line' + (es.length === 1 ? '' : 's') + ' on ' + days.length + ' day' + (days.length === 1 ? '' : 's') + '</div>' : '') +
       days.map(function (d) {
         return '<div class="res-day">' + (d === today() ? 'Today · ' : '') + esc(dayLabel(d)) + (un[d] && d !== today() ? ' <span class="tag" style="color:var(--flow)">NOT SHIPPED</span>' : '') + '</div>' + byDay[d].map(function (e) {
-          var dot = e.type === 'flowon' ? 'dot-f' : e.type === 'action' ? 'dot-a' : 'dot-n', hlq = q && q.charAt(0) !== '@' ? q : '';
+          var dot = e.type === 'flowon' ? 'dot-f' : e.type === 'action' ? 'dot-a' : e.type === 'itp' ? 'dot-i' : 'dot-n', hlq = q && q.charAt(0) !== '@' ? q : '';
           var mk = function (s) { s = esc(s); if (!hlq) return s; return s.replace(new RegExp('(' + esc(hlq.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) + ')', 'ig'), '<mark>$1</mark>'); };
           var where = e.itp ? (e.area ? e.area + ' · ' : '') + e.itp : e.area || e.tag || '';
           return '<button type="button" class="res" data-jump="' + esc(e.id) + '"><span class="tm">' + hm(e.time) + '</span><span style="display:flex;flex-direction:column;gap:3px"><span style="font-size:15px"><span class="' + dot + '">●</span> ' + mk(e.text) + (e.action ? ' <b>→ ' + mk(e.action) + '</b>' : '') + (e.who ? ' @' + esc(e.who) : '') + '</span>' + (where || e.photo ? '<span class="e-m">' + esc(where) + (e.photo ? (where ? ' · ' : '') + '▣ photo' : '') + '</span>' : '') + '</span></button>';
@@ -310,7 +337,7 @@
       var mb = (JSON.stringify(es).length / 1048576);
       sheet('<div class="grip"></div><div style="display:flex;flex-direction:column;gap:4px"><h2>Ship to BTC</h2><p>Goes by email to the job’s BTC inbox and files itself into your diary.</p></div>' +
         '<div class="list">' + ds.map(function (d) { var cc = counts(d.entries); return '<label><input type="checkbox" data-pick="' + d.day + '"' + (S.shipPick[d.day] ? ' checked' : '') + '><span class="lt"><b>' + (d.day === today() ? 'Today · ' : '') + esc(dayLabel(d.day)) + (d.day < today() ? ' <span class="tag" style="color:var(--flow)">NOT SHIPPED</span>' : '') + '</b><span>' + d.entries.length + ' entr' + (d.entries.length === 1 ? 'y' : 'ies') + (cc.photo ? ' · ' + cc.photo + ' photo' + (cc.photo > 1 ? 's' : '') : '') + '</span></span></label>'; }).join('') + '</div>' +
-        '<div class="tiles"><div class="tile n"><b>' + c.note + '</b><span>notes</span></div><div class="tile f"><b>' + c.flowon + '</b><span>flow-ons</span></div><div class="tile a"><b>' + c.action + '</b><span>actions</span></div></div>' +
+        '<div class="tiles"><div class="tile n"><b>' + c.note + '</b><span>notes</span></div><div class="tile f"><b>' + c.flowon + '</b><span>flow-ons</span></div><div class="tile a"><b>' + c.action + '</b><span>actions</span></div>' + (c.itp ? '<div class="tile i"><b>' + c.itp + '</b><span>ITP</span></div>' : '') + '</div>' +
         (noAct.length ? '<button type="button" class="bar-warn" data-fix="' + esc(noAct[0].id) + '" style="text-align:left">' + (noAct.length === 1 ? '1 flow-on has' : noAct.length + ' flow-ons have') + ' no action yet: <b>' + esc(noAct[0].text) + '</b><span style="margin-left:auto;color:var(--flow);font-weight:700;padding-right:8px">Fix ›</span></button>' : '') +
         '<button type="button" class="btn primary" data-act="doship"' + (pick.length ? '' : ' disabled') + ' style="min-height:56px;font-size:17px">Ship to Outlook</button>' +
         '<span class="fname">' + esc(fileName(pick)) + ' · ' + (mb < 0.1 ? '<0.1' : mb.toFixed(1)) + ' MB</span>');
@@ -327,7 +354,7 @@
     if (!pick.length) return;
     var es = []; pick.forEach(function (d) { es = es.concat(d.entries); });
     var body = { format: FORMAT, v: 1, project: { id: S.proj.project.id, code: S.proj.project.code, name: S.proj.project.name }, shippedBy: { name: S.me ? S.me.name : '', handle: S.me ? S.me.handle : '' }, shippedAt: new Date().toISOString(), app: 'BTC Walk ' + VERSION,
-      walks: [], entries: es.map(function (e) { return { id: e.id, day: e.day, time: e.time, type: e.type, raw: e.raw, text: e.text, action: e.action, who: e.who, area: e.area, itp: e.itp, tag: e.tag, location: e.location, priority: e.priority, due: e.due, photo: e.photo, edited: e.edited }; }), closures: [] };
+      walks: [], entries: es.map(function (e) { return { id: e.id, day: e.day, time: e.time, type: e.type, raw: e.raw, text: e.text, action: e.action, who: e.who, area: e.area, itp: e.itp, line: e.line || '', tag: e.tag, location: e.location, priority: e.priority, due: e.due, photo: e.photo, edited: e.edited }; }), closures: [] };
     // .btcwalk.txt as plain text (1.4.1): Android's share sheet refuses file types it doesn't know ("Permission denied"),
     // and plain text is one it always takes. BTC reads .btcwalk and .btcwalk.txt alike.
     var name = fileName(pick), file = new File([JSON.stringify(body)], name, { type: 'text/plain' });
@@ -456,12 +483,13 @@
   function openDay(d) { S.view = 'day'; S.day = d; S.find = ''; S.findOpen = false; S.edit = null; S.as = null; render(); }
 
   document.addEventListener('click', async function (ev) {
-    var t = ev.target.closest('button, [data-day], [data-e], [data-jump], [data-put], [data-me], [data-filter], [data-fix]');
+    var t = ev.target.closest('button, [data-day], [data-e], [data-jump], [data-put], [data-line], [data-me], [data-filter], [data-fix]');
     if (!t) { if (ev.target.id === 'sheet') closeSheet(); return; }
     if (t.id === 'more' || t.id === 'proj') { settings(); return; }
     if (t.id === 'find') { S.view = S.view === 'findall' ? 'days' : 'findall'; render(); return; }
     if (t.dataset.day) { openDay(t.dataset.day); return; }
     if (t.dataset.put) { var b = $('box'), v = b.value, pos = b.selectionStart || v.length, i = v.lastIndexOf('@', pos - 1); b.value = v.slice(0, i + 1) + t.dataset.put + ' ' + v.slice(pos); b.focus(); var np = i + 2 + t.dataset.put.length; b.setSelectionRange(np, np); S.draft = b.value; reads(); return; }
+    if (t.dataset.line) { var bl = $('box'), vl = bl.value, pl2 = bl.selectionStart || vl.length, head2 = vl.slice(0, pl2).replace(/\d[\d.]*$/, ''); bl.value = head2 + t.dataset.line + ' ' + vl.slice(pl2); var np2 = head2.length + t.dataset.line.length + 1; bl.focus(); bl.setSelectionRange(np2, np2); S.draft = bl.value; reads(); return; }
     if (t.dataset.e) {
       var e = S.entries.filter(function (x) { return x.id === t.dataset.e; })[0]; if (!e) return;
       if (S.find) { S.find = ''; S.findOpen = false; renderDay(); var el = document.querySelector('[data-e="' + e.id + '"]'); if (el) { el.scrollIntoView({ block: 'center' }); el.classList.add('sel'); setTimeout(function () { el.classList.remove('sel'); }, 1400); } return; }
@@ -482,7 +510,8 @@
     else if (act === 'photo') $('photo-in').click();
     else if (act === 'nophoto') { S.photo = null; renderDay(); }
     else if (act === 'findday') { S.findOpen = !S.findOpen; if (!S.findOpen) S.find = ''; renderDay(); var fd = $('find-day'); if (fd) fd.focus(); }
-    else if (act === 'as') { var cur = $('box') ? (S.as || parse($('box').value, S.day).type) : 'note'; S.as = CYCLE[(CYCLE.indexOf(cur) + 1) % 3]; reads(); }
+    else if (act === 'as') { var cur = $('box') ? (S.as || parse($('box').value, S.day).type) : 'note'; S.as = CYCLE[(CYCLE.indexOf(cur) + 1) % CYCLE.length]; reads(); }
+    else if (act === 'lastline') { var bx2 = $('box'); bx2.value = bx2.value.replace(/\s*$/, '') + ' @' + S.lastLine.itp + ' ' + S.lastLine.line; S.draft = bx2.value; bx2.focus(); reads(); }
     else if (act === 'unloc') { S.loc = null; await kvSet('loc', null); renderDay(); }
     else if (act === 'cancel') { S.edit = null; S.as = null; renderDay(); }
     else if (act === 'delete') { var dl = S.edit; if (!confirm('Delete this line?')) return; var gel = document.querySelector('[data-e="' + dl + '"]'); if (gel && MOTION) { gel.style.height = gel.offsetHeight + 'px'; void gel.offsetWidth; gel.classList.add('gone'); await new Promise(function (r) { setTimeout(r, 200); }); } S.entries = S.entries.filter(function (x) { return x.id !== dl; }); await delEntry(dl); S.edit = null; renderDay(); toast('Deleted'); }
@@ -504,7 +533,7 @@
     var p = await kvGet('project');
     if (!p) { H.ready = true; history.replaceState({ walk: 'root' }, ''); await useDemo(); return; }
     S.proj = p; S.entries = await allEntries(p.project.id);
-    S.me = (await kvGet('me:' + p.project.id)) || null; S.loc = (await kvGet('loc')) || null;
+    S.me = (await kvGet('me:' + p.project.id)) || null; S.loc = (await kvGet('loc')) || null; S.lastLine = (await kvGet('lastLine:' + p.project.id)) || null;
     H.ready = true; history.replaceState({ walk: 'root' }, ''); render();
     if (!S.me && !p.demo) pickMe();
   })();

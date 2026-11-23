@@ -22,8 +22,11 @@ It opens on a made-up demo job. Load your job with ⋮ › **Load project…** a
 | `replace the isolator label` | an **action** for you (it starts with a doing word) |
 | `flange gasket weeping @ITP-06` | tagged to that place, not where you are |
 | `at SBR 1` | moves you there (no line logged) |
+| `bolts torqued @ITP-06 3.2` (with a photo) | **ITP** evidence for that line: BTC files the photo on ITP-06 line 3.2 by itself. After `@ITP-06` and a space the ITP's lines are offered |
+| `ITP. grout done` or `@ITP grout done` | **ITP** evidence you'll put on its line on the PC (Build's Sort page) |
+| `note.` `action.` `flow.` `ITP.` at the start | says what the line is (the word is dropped); `@flow-on` is the same as `flow.` |
 
-Tap **LOG AS** to change the type before sending. Tap a line to edit or delete it. The camera button adds a photo to the next line (shrunk on the phone to about 200 KB).
+Tap **LOG AS** to change the type before sending (note, flow-on, action, ITP). With ITP and no line, the last line you used is a one-tap chip. Tap a line to edit or delete it. The camera button adds a photo to the next line (shrunk on the phone to about 200 KB).
 
 Due dates: `today`, `tomorrow`/`tmrw`, `fri`/`by Friday`/`on Fri`, `next Friday`, `eow`, `next week`, `in 3 days`, `28-11` or `28/11`. Saturday and Sunday need the full name.
 
@@ -35,14 +38,14 @@ BTC Walk only talks to BTC through two files.
 { "format": "btcproject", "v": 1, "made": ISO time,
   "project": { "id", "code", "name" },
   "people": [{ "name", "handle", "team": true }],
-  "areas": [{ "name", "itps": [{ "code", "title" }] }],
+  "areas": [{ "name", "itps": [{ "code", "title", "lines": [{ "no", "text" }] }] }],
   "flowons": [{ "no", "area", "itp", "desc", "action" }] }
 ```
 
 **Ship file** (`<code>_<you>_<day>.btcwalk.txt`: JSON, named .txt because Android's share sheet only takes file types it knows; BTC reads `.btcwalk` and `.btcwalk.txt`), what Ship sends:
 ```
 { "format": "btcwalk", "v": 1, "project": { "id", "code", "name" }, "shippedBy": { "name", "handle" }, "shippedAt",
-  "entries": [{ "id", "day", "time", "type": "note|flowon|action", "raw", "text", "action", "who", "area", "itp", "tag",
+  "entries": [{ "id", "day", "time", "type": "note|flowon|action|itp", "raw", "text", "action", "who", "area", "itp", "line", "tag",
                 "location", "priority", "due", "photo" (data URL), "edited" }],
   "walks": [], "closures": [] }
 ```
