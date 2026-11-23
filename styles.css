@@ -168,3 +168,17 @@ main.in-back { animation: in-back .22s cubic-bezier(.2, .8, .2, 1); }
 .toast.pop { animation: toast-in .2s cubic-bezier(.2, .8, .2, 1); }
 @keyframes toast-in { from { transform: translateY(12px); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+
+/* editing a line (1.4): dashed with a pencil in the chat, and a copy on top of the box with the bin and × */
+.e.ed { border-style: dashed; border-top-style: solid; }
+.pen { vertical-align: -1px; margin-right: 5px; }
+.pin { display: flex; align-items: stretch; gap: 2px; border: 1px dashed var(--note-line); border-left: 3px solid var(--note); border-radius: 3px; background: var(--note-bg); }
+.pin.flowon { border-color: var(--flow-line); border-left-color: var(--flow); background: var(--flow-bg); }
+.pin.action { border-color: var(--act-line); border-left-color: var(--act); background: var(--act-bg); }
+.pin-b { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; padding: 6px 4px 6px 10px; }
+.pin .e-k { font-family: var(--mono); font-size: 10.5px; font-weight: 700; letter-spacing: .04em; color: var(--note-ink); }
+.pin.flowon .e-k { color: var(--flow-ink); } .pin.action .e-k { color: var(--act-ink); }
+.pin-t { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pin-x { flex: none; width: 44px; border: 0; background: transparent; color: var(--muted); font-size: 22px; display: inline-flex; align-items: center; justify-content: center; }
+.pin-x.del { color: var(--bad); }
+.comp .pin { animation: line-in .18s cubic-bezier(.2, .8, .2, 1); }

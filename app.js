@@ -6,7 +6,7 @@
    (⋮ › Load project). No server, nothing sent anywhere else. */
 'use strict';
 (function () {
-  var VERSION = '1.3';
+  var VERSION = '1.4';
   var FORMAT = 'btcwalk', PFORMAT = 'btcproject';
 
   // ---------- the demo job (generic) ----------
@@ -167,9 +167,22 @@
     var who = e.who ? '@' + e.who + ' · ' : '';
     var head = e.type === 'action' ? 'ACTION · ' + (e.who ? '@' + esc(e.who) : 'you') + (e.priority ? ' · ' + esc(e.priority) : '') : TYPE[e.type].toUpperCase();
     var meta = [where ? '<span class="' + (e.there ? 'there' : '') + '">' + mark(where) + '</span>' : '', e.type !== 'action' && who ? esc(who.replace(' · ', '')) : '', e.due ? 'due ' + esc(dayLabel(e.due)) : '', e.edited ? 'edited' : '', (e.notFound || []).length ? '<span class="nf">@' + esc(e.notFound.join(' @')) + ' not found</span>' : ''].filter(Boolean).join(' · ');
-    return '<button type="button" class="e ' + e.type + (S.edit === e.id ? ' sel' : '') + (S.fresh === e.id ? ' new' : '') + '" data-e="' + esc(e.id) + '"><span class="e-h"><span class="e-k">' + head + '</span><span>' + hm(e.time) + (e.shipped ? ' ✓' : '') + '</span></span>' +
+    var ed = S.edit === e.id;
+    return '<button type="button" class="e ' + e.type + (ed ? ' ed' : '') + (S.fresh === e.id ? ' new' : '') + '" data-e="' + esc(e.id) + '"><span class="e-h"><span class="e-k">' + (ed ? PEN : '') + head + '</span><span>' + hm(e.time) + (e.shipped ? ' ✓' : '') + '</span></span>' +
       (e.text ? '<span class="e-t">' + mark(e.text) + '</span>' : '') + (e.type === 'flowon' ? (e.action ? '<span class="e-a">→ ' + mark(e.action) + '</span>' : '<span class="e-none">⚠ No action yet · tap to add</span>') : '') +
       (meta ? '<span class="e-m">' + meta + '</span>' : '') + (e.photo ? '<img src="' + e.photo + '" alt="Photo">' : '') + '</button>';
+  }
+  var PEN = '<svg class="pen" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg>';
+  var BIN = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg>';
+  // The line you're editing (1.4): a copy sits on top of the box (it can't scroll away when the keyboard comes up), dashed
+  // with a pencil, the bin and × on it. No editing row.
+  function pinHtml() {
+    var e = S.entries.filter(function (x) { return x.id === S.edit; })[0]; if (!e) return '';
+    var head = e.type === 'action' ? 'ACTION' + (e.who ? ' · @' + esc(e.who) : '') : TYPE[e.type].toUpperCase();
+    return '<div class="pin ' + e.type + '"><div class="pin-b"><span class="e-k">' + PEN + 'EDITING ' + head + ' · ' + hm(e.time) + '</span>' +
+      '<span class="pin-t">' + esc(e.text || '') + (e.type === 'flowon' && e.action ? ' → ' + esc(e.action) : '') + '</span></div>' +
+      '<button type="button" class="pin-x del" data-act="delete" aria-label="Delete this line">' + BIN + '</button>' +
+      '<button type="button" class="pin-x" data-act="cancel" aria-label="Stop editing">×</button></div>';
   }
   function renderDay() {
     var d = S.day, es = S.entries.filter(function (e) { return e.day === d; }).sort(function (a, b) { return a.time < b.time ? -1 : 1; });
@@ -183,9 +196,8 @@
       '<div class="chat" id="chat">' + (q && shown.length < es.length ? '<span class="note-c">' + (es.length - shown.length) + ' lines hidden · tap one to see it in the chat</span>' : '') +
       (shown.length ? shown.map(function (e) { return entryHtml(e, q); }).join('') : '<div class="empty">' + (q ? 'Nothing matches.' : 'Type below: a note, a photo, a flow-on (<b>what changed ; what next</b>) or an action (<b>@person</b>, <b>P1</b>, <b>fri</b>). <b>at SBR 1</b> says where you are.') + '</div>') + '</div>' +
       (loc ? '<div class="loc"><span class="l">AT</span><b>' + esc(loc) + '</b><button type="button" data-act="unloc" aria-label="Clear where you are">×</button></div>' : '') +
-      (S.edit ? '<div class="editing"><span>EDITING</span><button type="button" class="del" data-act="delete">Delete</button><button type="button" data-act="cancel">Cancel</button></div>' : '') +
       '<div class="comp"><div class="reads" id="reads"></div><div class="sug" id="sug"></div>' + (S.photo ? '<span class="thumb"><img src="' + S.photo + '" alt="Photo to send">Photo goes with the next line<button type="button" data-act="nophoto" aria-label="Remove the photo">×</button></span>' : '') +
-      '<div class="comp-row"><button type="button" class="cam" data-act="photo" aria-label="Add a photo"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="6" width="18" height="14" rx="2"/><circle cx="12" cy="13" r="3.5"/><path d="M9 6l1.5-2h3L15 6"/></svg></button>' +
+      (S.edit ? pinHtml() : '') + '<div class="comp-row"><button type="button" class="cam" data-act="photo" aria-label="Add a photo"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="6" width="18" height="14" rx="2"/><circle cx="12" cy="13" r="3.5"/><path d="M9 6l1.5-2h3L15 6"/></svg></button>' +
       '<textarea id="box" rows="1" placeholder="Note, flow-on (;) or @action…" aria-label="Write a line" enterkeyhint="send"></textarea><button type="button" class="send" id="send" data-act="send">' + (S.edit ? 'Save' : 'Send') + '</button></div></div>';
     var box = $('box');
     if (S.edit) { var ed = S.entries.filter(function (e) { return e.id === S.edit; })[0]; if (ed) box.value = ed.raw || ''; }
@@ -210,6 +222,7 @@
       var k = key(at[1]);
       var list = (S.proj.people || []).map(function (x) { return { put: x.handle, label: x.name, sub: '@' + x.handle }; }).concat(places().map(function (x) { return { put: x.name, label: x.name, sub: x.kind === 'itp' ? x.area : x.kind }; }))
         .filter(function (x) { return !k || key(x.put).indexOf(k) === 0 || key(x.label).indexOf(k) === 0; }).slice(0, 12);
+      if (list.length === 1 && k && (key(list[0].put) === k || key(list[0].label) === k)) list = [];   // already typed in full
       sg.innerHTML = list.map(function (x) { return '<button type="button" data-put="' + esc(x.put) + '">' + esc(x.label) + '<small>' + esc(x.sub) + '</small></button>'; }).join('');
     } else sg.innerHTML = '';
     if (!v.trim() && !S.photo) { r.innerHTML = ''; return; }
