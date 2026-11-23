@@ -9,7 +9,7 @@ Open **https://darathny-bit.github.io/Btc-walk/** on the phone, then:
 - **iPhone:** in Safari, Share › **Add to Home Screen**. (Keep it on the Home Screen: Safari clears data for sites you haven't opened in a while, Home Screen apps keep it.)
 - **Android:** in Chrome, ⋮ › **Install app** (or Add to Home screen › Install). Use it from the icon: it opens in its own window, and Back steps through the app.
 
-Back (Android): closes a sheet, an edit or the day's search first, then goes from a day to the days; on the days it says "Press back again to leave". The keyboard shrinks the app rather than pushing it up: the newest line stays just above the box.
+Back (Android): closes a sheet, an edit or the day's search first, then goes from a day to the days; on the days it says "Press back again to leave". On iPhone (the Home Screen app), swipe from the left edge to the right for the same steps. The keyboard shrinks the app rather than pushing it up: the newest line stays just above the box.
 
 It opens on a made-up demo job. Load your job with ⋮ › **Load project…** and pick yourself.
 

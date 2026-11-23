@@ -6,7 +6,7 @@
    (⋮ › Load project). No server, nothing sent anywhere else. */
 'use strict';
 (function () {
-  var VERSION = '1.1';
+  var VERSION = '1.2';
   var FORMAT = 'btcwalk', PFORMAT = 'btcproject';
 
   // ---------- the demo job (generic) ----------
@@ -470,6 +470,30 @@
     H.ready = true; history.replaceState({ walk: 'root' }, ''); render();
     if (!S.me && !p.demo) pickMe();
   })();
+  // Swipe back on iPhone (1.2). A Home Screen app on iPhone has no swipe-back of its own, so BTC Walk does it: start at
+  // the left edge and drag right, the same steps as Back on Android. Only in the Home Screen app on iPhone (in Safari,
+  // Safari's own swipe does it); on the days there's nowhere further back, so it does nothing.
+  var IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  var HOME = navigator.standalone === true || (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
+  S.edgeSwipe = IOS && HOME;
+  var sw = null;
+  document.addEventListener('touchstart', function (ev) {
+    sw = null;
+    if (!S.edgeSwipe || ev.touches.length !== 1 || ev.touches[0].clientX > 24 || H.n < 1) return;
+    sw = { x: ev.touches[0].clientX, y: ev.touches[0].clientY, dx: 0, el: $('sheet').hidden ? main : $('sheet').firstElementChild };
+  }, { passive: true });
+  document.addEventListener('touchmove', function (ev) {
+    if (!sw) return;
+    var t = ev.touches[0], dx = t.clientX - sw.x, dy = t.clientY - sw.y;
+    if (Math.abs(dy) > 60 && Math.abs(dy) > dx) { if (sw.el) sw.el.style.transform = ''; sw = null; return; }
+    sw.dx = Math.max(0, dx); if (sw.el) sw.el.style.transform = 'translateX(' + Math.min(sw.dx, 160) * 0.6 + 'px)';
+  }, { passive: true });
+  document.addEventListener('touchend', function () {
+    if (!sw) return;
+    var go = sw.dx > 70; if (sw.el) sw.el.style.transform = ''; sw = null;
+    if (go && H.n > 0) history.back();
+  }, { passive: true });
+  document.addEventListener('touchcancel', function () { if (sw && sw.el) sw.el.style.transform = ''; sw = null; }, { passive: true });
   // The keyboard (1.1): the app shrinks to the space above it instead of being pushed up. Android does it from the viewport
   // tag (interactive-widget=resizes-content); iPhone overlays the keyboard, so the app follows the visible area itself.
   if (window.visualViewport) {
