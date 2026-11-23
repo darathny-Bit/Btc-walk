@@ -39,7 +39,7 @@ BTC Walk only talks to BTC through two files.
   "flowons": [{ "no", "area", "itp", "desc", "action" }] }
 ```
 
-**Ship file** (`.btcwalk`), what Ship sends:
+**Ship file** (`<code>_<you>_<day>.btcwalk.txt`: JSON, named .txt because Android's share sheet only takes file types it knows; BTC reads `.btcwalk` and `.btcwalk.txt`), what Ship sends:
 ```
 { "format": "btcwalk", "v": 1, "project": { "id", "code", "name" }, "shippedBy": { "name", "handle" }, "shippedAt",
   "entries": [{ "id", "day", "time", "type": "note|flowon|action", "raw", "text", "action", "who", "area", "itp", "tag",

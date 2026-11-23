@@ -6,7 +6,7 @@
    (⋮ › Load project). No server, nothing sent anywhere else. */
 'use strict';
 (function () {
-  var VERSION = '1.4';
+  var VERSION = '1.4.1';
   var FORMAT = 'btcwalk', PFORMAT = 'btcproject';
 
   // ---------- the demo job (generic) ----------
@@ -320,7 +320,7 @@
   }
   function fileName(pick) {
     var days = pick.map(function (d) { return d.day; }).sort(), code = (S.proj.project.code || 'BTC').replace(/[^A-Za-z0-9]+/g, '');
-    return code + '_' + (S.me ? S.me.handle : 'X') + '_' + (days[days.length - 1] || today()) + (days.length > 1 ? '_' + days.length + 'days' : '') + '.btcwalk';
+    return code + '_' + (S.me ? S.me.handle : 'X') + '_' + (days[days.length - 1] || today()) + (days.length > 1 ? '_' + days.length + 'days' : '') + '.btcwalk.txt';
   }
   async function doShip() {
     var pick = daysOf().filter(function (d) { return d.unshipped && S.shipPick && S.shipPick[d.day]; });
@@ -328,17 +328,26 @@
     var es = []; pick.forEach(function (d) { es = es.concat(d.entries); });
     var body = { format: FORMAT, v: 1, project: { id: S.proj.project.id, code: S.proj.project.code, name: S.proj.project.name }, shippedBy: { name: S.me ? S.me.name : '', handle: S.me ? S.me.handle : '' }, shippedAt: new Date().toISOString(), app: 'BTC Walk ' + VERSION,
       walks: [], entries: es.map(function (e) { return { id: e.id, day: e.day, time: e.time, type: e.type, raw: e.raw, text: e.text, action: e.action, who: e.who, area: e.area, itp: e.itp, tag: e.tag, location: e.location, priority: e.priority, due: e.due, photo: e.photo, edited: e.edited }; }), closures: [] };
-    var name = fileName(pick), file = new File([JSON.stringify(body)], name, { type: 'application/json' });
+    // .btcwalk.txt as plain text (1.4.1): Android's share sheet refuses file types it doesn't know ("Permission denied"),
+    // and plain text is one it always takes. BTC reads .btcwalk and .btcwalk.txt alike.
+    var name = fileName(pick), file = new File([JSON.stringify(body)], name, { type: 'text/plain' });
+    var save = function () { var a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = name; document.body.appendChild(a); a.click(); a.remove(); };
     var shared = false;
     try {
       if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: name, text: (S.proj.project.name || '') + ' · site diary from BTC Walk' }); shared = true; }
-      else { var a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = name; document.body.appendChild(a); a.click(); a.remove(); shared = true; }
-    } catch (e) { if (e && e.name === 'AbortError') { toast('Not shipped.'); return; } toast('Could not share: ' + e.message, true); return; }
+      else { save(); shared = 'saved'; }
+    } catch (e) {
+      if (e && e.name === 'AbortError') { toast('Not shipped.'); return; }
+      // the phone wouldn't open the share sheet: save it instead, so the day isn't stuck
+      try { save(); } catch (e2) { toast('Could not ship: ' + e.message, true); return; }
+      shared = 'saved';
+    }
     if (!shared) return;
     var at = new Date().toISOString();
     for (var i = 0; i < es.length; i++) { es[i].shipped = true; es[i].shippedAt = at; await putEntry(es[i]); }
     S.shipPick = null; buzz([12, 60, 12]); closeSheet(); S.view = 'days'; render();
-    toast('Shipped ' + pick.length + ' day' + (pick.length > 1 ? 's' : '') + '. It stays on this phone too.');
+    if (shared === 'saved') toast('The phone wouldn’t share it, so it’s in Downloads: attach ' + name + ' to an email to ship it.', true);
+    else toast('Shipped ' + pick.length + ' day' + (pick.length > 1 ? 's' : '') + '. It stays on this phone too.');
   }
 
   // ---------- project, you, settings ----------
