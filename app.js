@@ -6,7 +6,7 @@
    (⋮ › Load project). No server, nothing sent anywhere else. */
 'use strict';
 (function () {
-  var VERSION = '1.4.1';
+  var VERSION = '1.5';
   var FORMAT = 'btcwalk', PFORMAT = 'btcproject';
 
   // ---------- the demo job (generic) ----------
