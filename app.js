@@ -6,7 +6,7 @@
    (⋮ › Load project). No server, nothing sent anywhere else. */
 'use strict';
 (function () {
-  var VERSION = '1.2';
+  var VERSION = '1.3';
   var FORMAT = 'btcwalk', PFORMAT = 'btcproject';
 
   // ---------- the demo job (generic) ----------
@@ -56,7 +56,7 @@
   function dayLabel(s) { var d = dayDate(s); return WD[d.getDay()] + ' ' + d.getDate() + ' ' + MO[d.getMonth()]; }
   function hm(iso) { var d = new Date(iso); return isNaN(d) ? '' : pad(d.getHours()) + ':' + pad(d.getMinutes()); }
   var toastT = null;
-  function toast(msg, bad) { var t = $('toast'); t.textContent = msg; t.className = 'toast' + (bad ? ' bad' : ''); t.hidden = false; clearTimeout(toastT); toastT = setTimeout(function () { t.hidden = true; }, bad ? 5000 : 2600); }
+  function toast(msg, bad) { var t = $('toast'); t.textContent = msg; t.className = 'toast' + (bad ? ' bad' : ''); t.hidden = false; void t.offsetWidth; t.classList.add('pop'); clearTimeout(toastT); toastT = setTimeout(function () { t.hidden = true; }, bad ? 5000 : 2600); }
   function uid() { return (S.me ? S.me.handle : 'X') + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7); }
 
   // ---------- reading a line ----------
@@ -167,7 +167,7 @@
     var who = e.who ? '@' + e.who + ' · ' : '';
     var head = e.type === 'action' ? 'ACTION · ' + (e.who ? '@' + esc(e.who) : 'you') + (e.priority ? ' · ' + esc(e.priority) : '') : TYPE[e.type].toUpperCase();
     var meta = [where ? '<span class="' + (e.there ? 'there' : '') + '">' + mark(where) + '</span>' : '', e.type !== 'action' && who ? esc(who.replace(' · ', '')) : '', e.due ? 'due ' + esc(dayLabel(e.due)) : '', e.edited ? 'edited' : '', (e.notFound || []).length ? '<span class="nf">@' + esc(e.notFound.join(' @')) + ' not found</span>' : ''].filter(Boolean).join(' · ');
-    return '<button type="button" class="e ' + e.type + (S.edit === e.id ? ' sel' : '') + '" data-e="' + esc(e.id) + '"><span class="e-h"><span class="e-k">' + head + '</span><span>' + hm(e.time) + (e.shipped ? ' ✓' : '') + '</span></span>' +
+    return '<button type="button" class="e ' + e.type + (S.edit === e.id ? ' sel' : '') + (S.fresh === e.id ? ' new' : '') + '" data-e="' + esc(e.id) + '"><span class="e-h"><span class="e-k">' + head + '</span><span>' + hm(e.time) + (e.shipped ? ' ✓' : '') + '</span></span>' +
       (e.text ? '<span class="e-t">' + mark(e.text) + '</span>' : '') + (e.type === 'flowon' ? (e.action ? '<span class="e-a">→ ' + mark(e.action) + '</span>' : '<span class="e-none">⚠ No action yet · tap to add</span>') : '') +
       (meta ? '<span class="e-m">' + meta + '</span>' : '') + (e.photo ? '<img src="' + e.photo + '" alt="Photo">' : '') + '</button>';
   }
@@ -244,7 +244,7 @@
     var en = { id: uid(), proj: S.proj.project.id, day: S.day, time: now, raw: raw, type: type, text: p.text || (S.photo ? 'Photo' : ''), action: p.action, who: p.who, area: p.there ? p.area : where.area || '', itp: p.there ? p.itp : where.itp || '', tag: p.there ? p.tag : where.tag || '',
       location: S.loc ? S.loc.name : '', priority: p.priority, due: p.due, photo: S.photo || '', edited: false, shipped: false, notFound: p.notFound, there: !!p.there };
     S.entries.push(en); await putEntry(en);
-    S.draft = ''; S.photo = null; S.as = null; renderDay();
+    S.draft = ''; S.photo = null; S.as = null; S.fresh = en.id; buzz(8); renderDay(); S.fresh = null;
   }
 
   // ---------- photos: shrunk on the phone (~200 KB) ----------
@@ -324,7 +324,7 @@
     if (!shared) return;
     var at = new Date().toISOString();
     for (var i = 0; i < es.length; i++) { es[i].shipped = true; es[i].shippedAt = at; await putEntry(es[i]); }
-    S.shipPick = null; closeSheet(); S.view = 'days'; render();
+    S.shipPick = null; buzz([12, 60, 12]); closeSheet(); S.view = 'days'; render();
     toast('Shipped ' + pick.length + ' day' + (pick.length > 1 ? 's' : '') + '. It stays on this phone too.');
   }
 
@@ -356,8 +356,16 @@
       '<div class="sec">HOW TO WRITE</div><p><b>plinth moved 25 mm ; shop drawing 25 mm shorter</b> is a flow-on (or use --). <b>@NH</b> makes it NH’s action; <b>P1</b>, <b>fri</b>, <b>28-11</b> set priority and due. <b>@SBR 1</b> or <b>@ITP-06</b> tags where it is; <b>at SBR 1</b> on its own moves you there. Tap <b>LOG AS</b> to change the type.</p>' +
       '<p class="mono" style="font-size:11px">BTC Walk ' + VERSION + '</p>');
   }
-  function sheet(html) { var s = $('sheet'); s.innerHTML = '<div class="sheet" role="dialog" aria-modal="true">' + html + '</div>'; s.hidden = false; sync(); }
-  function closeSheet() { var s = $('sheet'); s.hidden = true; s.innerHTML = ''; sync(); }
+  // Sheets rise from the bottom and slide away; drag one down to close it (1.3).
+  var sheetT = null;
+  function sheet(html) { var s = $('sheet'); clearTimeout(sheetT); s.classList.remove('out'); s.innerHTML = '<div class="sheet" role="dialog" aria-modal="true">' + html + '</div>'; s.hidden = false; sync(); }
+  function sheetOpen() { var s = $('sheet'); return !s.hidden && !s.classList.contains('out'); }
+  function hideSheet(after) {
+    var s = $('sheet'); if (!sheetOpen()) return;
+    s.classList.add('out'); clearTimeout(sheetT);
+    sheetT = setTimeout(function () { s.hidden = true; s.innerHTML = ''; s.classList.remove('out'); if (after) after(); }, MOTION ? 200 : 0);
+  }
+  function closeSheet() { hideSheet(sync); }
   async function useDemo() {
     var p = JSON.parse(JSON.stringify(DEMO)); p.made = new Date().toISOString(); p.loadedAt = p.made;
     await kvSet('project', p); S.proj = p; S.entries = await allEntries(p.project.id);
@@ -385,16 +393,24 @@
   function render() {
     $('proj').textContent = (S.proj.project.code || S.proj.project.name || '') + ' ▾';
     $('find').classList.toggle('on', S.view === 'findall');
+    var was = S.shown; S.shown = S.view;
     if (S.view === 'day') renderDay(); else if (S.view === 'findall') renderFindAll(); else renderDays();
+    if (was && was !== S.view) slide(S.view === 'days' ? 'back' : 'fwd');
     sync();
   }
+  // Motion (1.3): a screen slides in from the right going in, from the left coming back; quick, no bounce, and none at
+  // all if the phone asks for reduced motion. A short buzz on send and ship (Android; iPhone doesn't let web apps buzz).
+  var MOTION = !(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+  function slide(dir) { if (!MOTION) return; main.classList.remove('in-fwd', 'in-back'); void main.offsetWidth; main.classList.add('in-' + dir); }
+  main.addEventListener('animationend', function (ev) { if (ev.target === main) main.classList.remove('in-fwd', 'in-back'); });
+  function buzz(p) { try { if (MOTION && navigator.vibrate) navigator.vibrate(p); } catch (e) { /* no buzz here */ } }
 
   // ---------- Back (1.1) ----------
   // The phone's Back steps through the app: it closes a sheet, an edit or the day's search first, then takes you from a day
   // (or search) to the days. On the days, Back once says "Press back again to leave"; a second Back leaves. Each open layer
   // is one history entry above a guard entry; sync() keeps the count in step with what's open after every draw.
   var H = { n: 0, guard: false, skip: 0, leaving: null };
-  function layers() { return (S.view !== 'days' ? 1 : 0) + ($('sheet').hidden ? 0 : 1) + (S.view === 'day' && S.edit ? 1 : 0) + (S.view === 'day' && S.findOpen ? 1 : 0); }
+  function layers() { return (S.view !== 'days' ? 1 : 0) + (sheetOpen() ? 1 : 0) + (S.view === 'day' && S.edit ? 1 : 0) + (S.view === 'day' && S.findOpen ? 1 : 0); }
   function sync() {
     if (!H.ready) return;
     if (!H.guard) { history.pushState({ walk: 'guard' }, ''); H.guard = true; }
@@ -403,7 +419,7 @@
     if (H.n > want) { H.skip++; history.go(want - H.n); H.n = want; }
   }
   function closeTop() {
-    if (!$('sheet').hidden) { var s = $('sheet'); s.hidden = true; s.innerHTML = ''; return; }
+    if (sheetOpen()) { hideSheet(); return; }
     if (S.view === 'day' && S.edit) { S.edit = null; S.as = null; renderDay(); return; }
     if (S.view === 'day' && S.findOpen) { S.findOpen = false; S.find = ''; renderDay(); return; }
     if (S.view !== 'days') { S.view = 'days'; S.edit = null; S.findOpen = false; S.find = ''; render(); }
@@ -447,7 +463,7 @@
     else if (act === 'as') { var cur = $('box') ? (S.as || parse($('box').value, S.day).type) : 'note'; S.as = CYCLE[(CYCLE.indexOf(cur) + 1) % 3]; reads(); }
     else if (act === 'unloc') { S.loc = null; await kvSet('loc', null); renderDay(); }
     else if (act === 'cancel') { S.edit = null; S.as = null; renderDay(); }
-    else if (act === 'delete') { var dl = S.edit; if (!confirm('Delete this line?')) return; S.entries = S.entries.filter(function (x) { return x.id !== dl; }); await delEntry(dl); S.edit = null; renderDay(); toast('Deleted'); }
+    else if (act === 'delete') { var dl = S.edit; if (!confirm('Delete this line?')) return; var gel = document.querySelector('[data-e="' + dl + '"]'); if (gel && MOTION) { gel.style.height = gel.offsetHeight + 'px'; void gel.offsetWidth; gel.classList.add('gone'); await new Promise(function (r) { setTimeout(r, 200); }); } S.entries = S.entries.filter(function (x) { return x.id !== dl; }); await delEntry(dl); S.edit = null; renderDay(); toast('Deleted'); }
     else if (act === 'load') $('proj-in').click();
     else if (act === 'me') pickMe();
     else if (act === 'demo') useDemo();
@@ -480,7 +496,7 @@
   document.addEventListener('touchstart', function (ev) {
     sw = null;
     if (!S.edgeSwipe || ev.touches.length !== 1 || ev.touches[0].clientX > 24 || H.n < 1) return;
-    sw = { x: ev.touches[0].clientX, y: ev.touches[0].clientY, dx: 0, el: $('sheet').hidden ? main : $('sheet').firstElementChild };
+    sw = { x: ev.touches[0].clientX, y: ev.touches[0].clientY, dx: 0, el: sheetOpen() ? $('sheet').firstElementChild : main };
   }, { passive: true });
   document.addEventListener('touchmove', function (ev) {
     if (!sw) return;
@@ -494,6 +510,23 @@
     if (go && H.n > 0) history.back();
   }, { passive: true });
   document.addEventListener('touchcancel', function () { if (sw && sw.el) sw.el.style.transform = ''; sw = null; }, { passive: true });
+  var sd = null;
+  $('sheet').addEventListener('touchstart', function (ev) {
+    var sh = $('sheet').firstElementChild; sd = null;
+    if (!sh || ev.touches.length !== 1 || sw || sh.scrollTop > 0 || !sh.contains(ev.target)) return;
+    sd = { y: ev.touches[0].clientY, dy: 0, el: sh };
+  }, { passive: true });
+  $('sheet').addEventListener('touchmove', function (ev) {
+    if (!sd) return;
+    sd.dy = Math.max(0, ev.touches[0].clientY - sd.y);
+    if (sd.dy > 6) { sd.el.style.transition = 'none'; sd.el.style.transform = 'translateY(' + sd.dy + 'px)'; }
+  }, { passive: true });
+  $('sheet').addEventListener('touchend', function () {
+    if (!sd) return;
+    var el = sd.el, go = sd.dy > 110; sd = null;
+    el.style.transition = ''; el.style.transform = '';
+    if (go) { if (H.n > 0) history.back(); else closeSheet(); }
+  }, { passive: true });
   // The keyboard (1.1): the app shrinks to the space above it instead of being pushed up. Android does it from the viewport
   // tag (interactive-widget=resizes-content); iPhone overlays the keyboard, so the app follows the visible area itself.
   if (window.visualViewport) {
