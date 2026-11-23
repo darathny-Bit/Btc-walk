@@ -21,6 +21,7 @@ It opens on a made-up demo job. Load your job with ⋮ › **Load project…** a
 | `chase the cable schedule @AK P1 fri` | an **action** for AK, priority 1, due Friday |
 | `replace the isolator label` | an **action** for you (it starts with a doing word) |
 | `flange gasket weeping @ITP-06` | tagged to that place, not where you are |
+| `walk the decanter @AK @SR` or `toolbox talk @all` | an **action** for both (or everyone): one card in BTC, each closes their own part |
 | `at SBR 1` | moves you there (no line logged) |
 | `bolts torqued @ITP-06 3.2` (with a photo) | **ITP** evidence for that line: BTC files the photo on ITP-06 line 3.2 by itself. After `@ITP-06` and a space the ITP's lines are offered |
 | `ITP. grout done` or `@ITP grout done` | **ITP** evidence you'll put on its line on the PC (Build's Sort page) |
@@ -52,3 +53,6 @@ BTC Walk only talks to BTC through two files.
 
 ## This repo
 App code only: `index.html`, `app.js`, `styles.css`, `sw.js` (keeps the app working with no signal), `manifest.webmanifest`, `icons/`. **Never commit a project file, a ship file or anything from a real job.** The demo job is made up.
+
+## Ship as often as you like
+Each ship is its own file (the time is in the name) and carries the whole day; BTC files each line once. Edit or delete a line after shipping and the day shows **CHANGED · RESHIP** until you ship again: BTC then updates the edited line (marked edited on the phone) and takes deleted ones out (`removed` in the ship file).

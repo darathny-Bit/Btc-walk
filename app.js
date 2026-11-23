@@ -6,7 +6,7 @@
    (⋮ › Load project). No server, nothing sent anywhere else. */
 'use strict';
 (function () {
-  var VERSION = '1.6';
+  var VERSION = '1.7';
   var FORMAT = 'btcwalk', PFORMAT = 'btcproject';
 
   // ---------- the demo job (generic) ----------
@@ -124,7 +124,8 @@
         if (place.kind === 'itp') { var ln = /^\s+(\d+(?:\.\d+)*)(?=[\s,;]|$)/.exec(text.slice(i + cut)); if (ln) { out.line = ln[1]; cut += ln[0].length; if (!out.forced) out.forced = 'itp'; } }
         text = (text.slice(0, i) + text.slice(i + cut)).replace(/\s{2,}/g, ' '); continue;
       }
-      var m = /^@(\S+)/.exec(text.slice(i)), who = m ? person(m[1].replace(/[,.;:]+$/, '')) : null;
+      var m = /^@(\S+)/.exec(text.slice(i)), mh = m ? m[1].replace(/[,.;:]+$/, '') : '';
+      var who = m ? (/^(all|everyone)$/i.test(mh) ? { handle: 'all', name: 'Everyone' } : person(mh)) : null;   // @all: everyone in the team (1.7)
       if (who) { people.push(who); text = (text.slice(0, i) + text.slice(i + m[0].length)).replace(/\s{2,}/g, ' '); continue; }
       if (m) out.notFound.push(m[1]);
       i++;
@@ -140,7 +141,7 @@
     else { out.text = text; if (out.forced) out.type = out.forced; else if (people.length || out.priority || out.due || VERBS.test(text)) out.type = 'action'; }
     if (out.forced === 'flowon') out.type = 'flowon';
     if (out.type === 'flowon' && lead && sep) out.text = out.text.replace(/^(flow-?on|bridge)\b[:\s]*/i, '');
-    out.who = people.length ? people[0].handle : '';
+    out.who = people.map(function (p) { return p.handle; }).filter(function (h, k, a) { return a.indexOf(h) === k; }).join(' ');   // one or more (1.7): @AK @SR is 'AK SR'
     if (place) { out.area = place.area || ''; out.itp = place.itp || ''; out.tag = place.tag || ''; out.there = true; }
     return out;
   }
@@ -151,10 +152,17 @@
   function daysOf() {
     var m = {};
     S.entries.forEach(function (e) { (m[e.day] = m[e.day] || []).push(e); });
-    return Object.keys(m).sort().reverse().map(function (d) { var es = m[d].sort(function (a, b) { return a.time < b.time ? -1 : 1; }); return { day: d, entries: es, unshipped: es.some(function (e) { return !e.shipped; }) }; });
+    var gone = {}; (S.gone || []).forEach(function (g) { gone[g.day] = (gone[g.day] || 0) + 1; m[g.day] = m[g.day] || []; });
+    return Object.keys(m).sort().reverse().map(function (d) {
+      var es = m[d].sort(function (a, b) { return a.time < b.time ? -1 : 1; });
+      // changed since it was shipped (1.7): an edited line, or one deleted after shipping; ship again to bring BTC up to date
+      var changed = !!gone[d] || es.some(function (e) { return !e.shipped && e.shippedAt; });
+      return { day: d, entries: es, unshipped: changed || es.some(function (e) { return !e.shipped; }), changed: changed, gone: gone[d] || 0 };
+    });
   }
   function counts(es) { var c = { note: 0, flowon: 0, action: 0, itp: 0, photo: 0 }; es.forEach(function (e) { c[e.type] = (c[e.type] || 0) + 1; if (e.photo) c.photo++; }); return c; }
   function dotsRow(c) { return '<span class="dots-row"><span><span class="dot-n">●</span> ' + c.note + '</span><span><span class="dot-f">●</span> ' + c.flowon + '</span><span><span class="dot-a">●</span> ' + c.action + '</span>' + (c.itp ? '<span><span class="dot-i">●</span> ' + c.itp + '</span>' : '') + (c.photo ? '<span class="muted">▣ ' + c.photo + '</span>' : '') + '</span>'; }
+  var RESHIP = '<span class="flag">✎ CHANGED · RESHIP</span>';
   var FLAG = '<span class="flag"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1F1A10" stroke-width="2.6" aria-hidden="true"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg>NOT SHIPPED</span>';
 
   function renderDays() {
@@ -163,12 +171,14 @@
     var html = '';
     if (S.proj.demo) html += '<div class="bar-info">Demo job (made-up names). Load your job’s project file in ⋮ › Load project. Nothing leaves this phone until you ship.</div>';
     else if (age >= 7) html += '<div class="bar-warn">Project file is ' + age + ' days old<button type="button" data-act="load">Reload</button></div>';
-    if (old.length) html += '<div class="bar-warn">' + (old.length === 1 ? dayLabel(old[0].day) + ' isn’t' : old.length + ' days aren’t') + ' shipped yet<button type="button" data-act="ship">Ship now</button></div>';
+    var chg = ds.filter(function (d) { return d.changed; });
+    if (chg.length) html += '<div class="bar-warn">' + (chg.length === 1 ? (chg[0].day === t ? 'Today' : dayLabel(chg[0].day)) + ' changed' : chg.length + ' days changed') + ' since you shipped<button type="button" data-act="ship">Ship again</button></div>';
+    else if (old.length) html += '<div class="bar-warn">' + (old.length === 1 ? dayLabel(old[0].day) + ' isn’t' : old.length + ' days aren’t') + ' shipped yet<button type="button" data-act="ship">Ship now</button></div>';
     var cutoff = addDays(t, -6), recent = ds.filter(function (d) { return d.day >= cutoff; }), earlier = ds.filter(function (d) { return d.day < cutoff; });
     var card = function (d) {
       var c = counts(d.entries), isT = d.day === t;
       return '<button type="button" class="day' + (isT ? ' today' : '') + (d.unshipped && !isT ? ' unshipped' : '') + '" data-day="' + d.day + '"><span class="day-h"><span class="day-d">' + (isT ? 'Today · ' : '') + esc(dayLabel(d.day)) + '</span>' +
-        (isT ? (d.unshipped ? '<span class="tag live">LIVE</span>' : '<span class="tag sent">✓ Sent</span>') : d.unshipped ? FLAG : '<span class="tag sent">✓ Sent</span>') + '</span>' + dotsRow(c) + '</button>';
+        (d.changed ? RESHIP : isT ? (d.unshipped ? '<span class="tag live">LIVE</span>' : '<span class="tag sent">✓ Sent</span>') : d.unshipped ? FLAG : '<span class="tag sent">✓ Sent</span>') + '</span>' + dotsRow(c) + '</button>';
     };
     if (recent.length) html += '<div class="kick">THIS WEEK</div>' + recent.map(card).join('');
     if (earlier.length) html += S.showEarlier ? '<div class="kick">EARLIER</div>' + earlier.map(card).join('') : '<button type="button" class="day" data-act="earlier"><span class="muted small">Earlier · ' + earlier.length + ' day' + (earlier.length > 1 ? 's' : '') + (earlier.some(function (d) { return d.unshipped; }) ? '' : ', all sent') + ' ▸</span></button>';
@@ -179,12 +189,13 @@
   }
 
   // ---------- a day's chat ----------
+  function whoTxt(w) { return String(w || '').split(/\s+/).filter(Boolean).map(function (h) { return '@' + h; }).join(' '); }
   function itpHead(e) { return 'ITP · ' + (e.itp && e.line ? esc(e.itp) + ' ' + esc(e.line) : 'TO SORT ON THE PC'); }
   function entryHtml(e, hl) {
     var mark = function (s) { s = esc(s); if (!hl) return s; var q = hl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); return s.replace(new RegExp('(' + esc(q) + ')', 'ig'), '<mark>$1</mark>'); };
     var where = e.itp ? (e.area ? e.area + ' · ' : '') + e.itp : e.area || e.tag || '';
-    var who = e.who ? '@' + e.who + ' · ' : '';
-    var head = e.type === 'action' ? 'ACTION · ' + (e.who ? '@' + esc(e.who) : 'you') + (e.priority ? ' · ' + esc(e.priority) : '') : e.type === 'itp' ? itpHead(e) : TYPE[e.type].toUpperCase();
+    var who = e.who ? whoTxt(e.who) + ' · ' : '';
+    var head = e.type === 'action' ? 'ACTION · ' + (e.who ? esc(whoTxt(e.who)) : 'you') + (e.priority ? ' · ' + esc(e.priority) : '') : e.type === 'itp' ? itpHead(e) : TYPE[e.type].toUpperCase();
     var meta = [where ? '<span class="' + (e.there ? 'there' : '') + '">' + mark(where) + '</span>' : '', e.type !== 'action' && who ? esc(who.replace(' · ', '')) : '', e.due ? 'due ' + esc(dayLabel(e.due)) : '', e.edited ? 'edited' : '', (e.notFound || []).length ? '<span class="nf">@' + esc(e.notFound.join(' @')) + ' not found</span>' : ''].filter(Boolean).join(' · ');
     var ed = S.edit === e.id;
     return '<button type="button" class="e ' + e.type + (ed ? ' ed' : '') + (S.fresh === e.id ? ' new' : '') + '" data-e="' + esc(e.id) + '"><span class="e-h"><span class="e-k">' + (ed ? PEN : '') + head + '</span><span>' + hm(e.time) + (e.shipped ? ' ✓' : '') + '</span></span>' +
@@ -197,7 +208,7 @@
   // with a pencil, the bin and × on it. No editing row.
   function pinHtml() {
     var e = S.entries.filter(function (x) { return x.id === S.edit; })[0]; if (!e) return '';
-    var head = e.type === 'action' ? 'ACTION' + (e.who ? ' · @' + esc(e.who) : '') : e.type === 'itp' ? itpHead(e) : TYPE[e.type].toUpperCase();
+    var head = e.type === 'action' ? 'ACTION' + (e.who ? ' · ' + esc(whoTxt(e.who)) : '') : e.type === 'itp' ? itpHead(e) : TYPE[e.type].toUpperCase();
     return '<div class="pin ' + e.type + '"><div class="pin-b"><span class="e-k">' + PEN + 'EDITING ' + head + ' · ' + hm(e.time) + '</span>' +
       '<span class="pin-t">' + esc(e.text || '') + (e.type === 'flowon' && e.action ? ' → ' + esc(e.action) : '') + '</span></div>' +
       '<button type="button" class="pin-x del" data-act="delete" aria-label="Delete this line">' + BIN + '</button>' +
@@ -243,7 +254,7 @@
       sg.innerHTML = li.lines.filter(function (l) { return !lk || l.no.indexOf(lk) === 0; }).slice(0, 14).map(function (l) { return '<button type="button" data-line="' + esc(l.no) + '">' + esc(l.no) + '<small>' + esc(l.text) + '</small></button>'; }).join('');
     } else if (at && at[1].length <= 24 && !/\s{2}/.test(at[1])) {
       var k = key(at[1]);
-      var list = (S.proj.people || []).map(function (x) { return { put: x.handle, label: x.name, sub: '@' + x.handle }; }).concat(places().map(function (x) { return { put: x.name, label: x.name, sub: x.kind === 'itp' ? x.area : x.kind }; }))
+      var list = (S.proj.people || []).map(function (x) { return { put: x.handle, label: x.name, sub: '@' + x.handle }; }).concat([{ put: 'all', label: 'Everyone', sub: '@all' }]).concat(places().map(function (x) { return { put: x.name, label: x.name, sub: x.kind === 'itp' ? x.area : x.kind }; }))
         .filter(function (x) { return !k || key(x.put).indexOf(k) === 0 || key(x.label).indexOf(k) === 0; }).slice(0, 12);
       if (list.length === 1 && k && (key(list[0].put) === k || key(list[0].label) === k)) list = [];   // already typed in full
       sg.innerHTML = list.map(function (x) { return '<button type="button" data-put="' + esc(x.put) + '">' + esc(x.label) + '<small>' + esc(x.sub) + '</small></button>'; }).join('');
@@ -253,7 +264,7 @@
     var type = S.as || p.type;
     var where = p.itp ? (p.area ? p.area + ' · ' : '') + p.itp : p.area || p.tag || '';
     r.innerHTML = 'Log as <button type="button" class="as ' + type + '" data-act="as">' + TYPE[type].toUpperCase() + ' ▾</button>' +
-      (where ? '<span class="chip warn">@ ' + esc(where) + '</span>' : '') + (type === 'action' ? '<span class="chip">' + (p.who ? '@' + esc(p.who) : 'you') + '</span>' : p.who ? '<span class="chip">@' + esc(p.who) + '</span>' : '') +
+      (where ? '<span class="chip warn">@ ' + esc(where) + '</span>' : '') + (type === 'action' ? '<span class="chip">' + (p.who ? esc(whoTxt(p.who)) : 'you') + '</span>' : p.who ? '<span class="chip">@' + esc(p.who) + '</span>' : '') +
       (p.priority ? '<span class="chip">' + p.priority + '</span>' : '') + (p.due ? '<span class="chip">due ' + esc(dayLabel(p.due)) + '</span>' : '') +
       (type === 'flowon' ? (p.action ? '<span class="chip">→ ' + esc(p.action) + '</span>' : '<span class="chip warn">no action yet: add ; and what next</span>') : '') +
       (p.notFound.length ? '<span class="chip nf">@' + esc(p.notFound.join(' @')) + ' not found</span>' : '') +
@@ -265,7 +276,7 @@
     if (q === 'actions' || q === 'action') return e.type === 'action';
     if (q === 'notes' || q === 'note') return e.type === 'note';
     if (q === 'itp' || q === 'itps') return e.type === 'itp';
-    if (/^@/.test(q)) return key(e.who) === key(q.slice(1)) || key(e.area) === key(q.slice(1)) || key(e.itp) === key(q.slice(1));
+    if (/^@/.test(q)) return String(e.who || '').split(/\s+/).some(function (h) { return key(h) === key(q.slice(1)); }) || key(e.area) === key(q.slice(1)) || key(e.itp) === key(q.slice(1));
     return [e.text, e.action, e.area, e.itp, e.tag, e.who, e.raw].join(' ').toLowerCase().indexOf(q) >= 0;
   }
   async function send() {
@@ -336,7 +347,7 @@
       var c = counts(es), noAct = es.filter(function (e) { return e.type === 'flowon' && !e.action; });
       var mb = (JSON.stringify(es).length / 1048576);
       sheet('<div class="grip"></div><div style="display:flex;flex-direction:column;gap:4px"><h2>Ship to BTC</h2><p>Goes by email to the job’s BTC inbox and files itself into your diary.</p></div>' +
-        '<div class="list">' + ds.map(function (d) { var cc = counts(d.entries); return '<label><input type="checkbox" data-pick="' + d.day + '"' + (S.shipPick[d.day] ? ' checked' : '') + '><span class="lt"><b>' + (d.day === today() ? 'Today · ' : '') + esc(dayLabel(d.day)) + (d.day < today() ? ' <span class="tag" style="color:var(--flow)">NOT SHIPPED</span>' : '') + '</b><span>' + d.entries.length + ' entr' + (d.entries.length === 1 ? 'y' : 'ies') + (cc.photo ? ' · ' + cc.photo + ' photo' + (cc.photo > 1 ? 's' : '') : '') + '</span></span></label>'; }).join('') + '</div>' +
+        '<div class="list">' + ds.map(function (d) { var cc = counts(d.entries); return '<label><input type="checkbox" data-pick="' + d.day + '"' + (S.shipPick[d.day] ? ' checked' : '') + '><span class="lt"><b>' + (d.day === today() ? 'Today · ' : '') + esc(dayLabel(d.day)) + (d.changed ? ' <span class="tag" style="color:var(--flow)">CHANGED</span>' : d.day < today() ? ' <span class="tag" style="color:var(--flow)">NOT SHIPPED</span>' : '') + '</b><span>' + d.entries.length + ' entr' + (d.entries.length === 1 ? 'y' : 'ies') + (cc.photo ? ' · ' + cc.photo + ' photo' + (cc.photo > 1 ? 's' : '') : '') + (d.gone ? ' · ' + d.gone + ' deleted' : '') + '</span></span></label>'; }).join('') + '</div>' +
         '<div class="tiles"><div class="tile n"><b>' + c.note + '</b><span>notes</span></div><div class="tile f"><b>' + c.flowon + '</b><span>flow-ons</span></div><div class="tile a"><b>' + c.action + '</b><span>actions</span></div>' + (c.itp ? '<div class="tile i"><b>' + c.itp + '</b><span>ITP</span></div>' : '') + '</div>' +
         (noAct.length ? '<button type="button" class="bar-warn" data-fix="' + esc(noAct[0].id) + '" style="text-align:left">' + (noAct.length === 1 ? '1 flow-on has' : noAct.length + ' flow-ons have') + ' no action yet: <b>' + esc(noAct[0].text) + '</b><span style="margin-left:auto;color:var(--flow);font-weight:700;padding-right:8px">Fix ›</span></button>' : '') +
         '<button type="button" class="btn primary" data-act="doship"' + (pick.length ? '' : ' disabled') + ' style="min-height:56px;font-size:17px">Ship to Outlook</button>' +
@@ -347,14 +358,16 @@
   }
   function fileName(pick) {
     var days = pick.map(function (d) { return d.day; }).sort(), code = (S.proj.project.code || 'BTC').replace(/[^A-Za-z0-9]+/g, '');
-    return code + '_' + (S.me ? S.me.handle : 'X') + '_' + (days[days.length - 1] || today()) + (days.length > 1 ? '_' + days.length + 'days' : '') + '.btcwalk.txt';
+    var n = new Date(), hhmm = String(n.getHours()).padStart(2, '0') + String(n.getMinutes()).padStart(2, '0');   // the time (1.7): each ship its own file
+    return code + '_' + (S.me ? S.me.handle : 'X') + '_' + (days[days.length - 1] || today()) + (days.length > 1 ? '_' + days.length + 'days' : '') + '_' + hhmm + '.btcwalk.txt';
   }
   async function doShip() {
     var pick = daysOf().filter(function (d) { return d.unshipped && S.shipPick && S.shipPick[d.day]; });
     if (!pick.length) return;
-    var es = []; pick.forEach(function (d) { es = es.concat(d.entries); });
+    var es = [], pickDays = {}; pick.forEach(function (d) { es = es.concat(d.entries); pickDays[d.day] = true; });
+    var gone = (S.gone || []).filter(function (g) { return pickDays[g.day]; });
     var body = { format: FORMAT, v: 1, project: { id: S.proj.project.id, code: S.proj.project.code, name: S.proj.project.name }, shippedBy: { name: S.me ? S.me.name : '', handle: S.me ? S.me.handle : '' }, shippedAt: new Date().toISOString(), app: 'BTC Walk ' + VERSION,
-      walks: [], entries: es.map(function (e) { return { id: e.id, day: e.day, time: e.time, type: e.type, raw: e.raw, text: e.text, action: e.action, who: e.who, area: e.area, itp: e.itp, line: e.line || '', tag: e.tag, location: e.location, priority: e.priority, due: e.due, photo: e.photo, edited: e.edited }; }), closures: [] };
+      walks: [], entries: es.map(function (e) { return { id: e.id, day: e.day, time: e.time, type: e.type, raw: e.raw, text: e.text, action: e.action, who: e.who, area: e.area, itp: e.itp, line: e.line || '', tag: e.tag, location: e.location, priority: e.priority, due: e.due, photo: e.photo, edited: e.edited }; }), removed: gone.map(function (g) { return { id: g.id, day: g.day }; }), closures: [] };
     // .btcwalk.txt as plain text (1.4.1): Android's share sheet refuses file types it doesn't know ("Permission denied"),
     // and plain text is one it always takes. BTC reads .btcwalk and .btcwalk.txt alike.
     var name = fileName(pick), file = new File([JSON.stringify(body)], name, { type: 'text/plain' });
@@ -372,6 +385,7 @@
     if (!shared) return;
     var at = new Date().toISOString();
     for (var i = 0; i < es.length; i++) { es[i].shipped = true; es[i].shippedAt = at; await putEntry(es[i]); }
+    if (gone.length) { S.gone = (S.gone || []).filter(function (g) { return !pickDays[g.day]; }); await kvSet('gone:' + S.proj.project.id, S.gone); }
     S.shipPick = null; buzz([12, 60, 12]); closeSheet(); S.view = 'days'; render();
     if (shared === 'saved') toast('The phone wouldn’t share it, so it’s in Downloads: attach ' + name + ' to an email to ship it.', true);
     else toast('Shipped ' + pick.length + ' day' + (pick.length > 1 ? 's' : '') + '. It stays on this phone too.');
@@ -384,7 +398,7 @@
     if (!p || p.format !== PFORMAT || !p.project || !p.project.id) { toast('That isn’t a BTC project file (make it in Build: ⋮ › Phone project file…).', true); return; }
     p.loadedAt = new Date().toISOString();
     await kvSet('project', p); S.proj = p;
-    S.entries = await allEntries(p.project.id);
+    S.entries = await allEntries(p.project.id); S.gone = (await kvGet('gone:' + p.project.id)) || [];
     var me = await kvGet('me:' + p.project.id); S.me = me || null; S.loc = null; await kvSet('loc', null);
     closeSheet(); S.view = 'days'; render();
     toast('Loaded ' + p.project.name + (p.made ? ' (from ' + dayLabel(p.made.slice(0, 10)) + ')' : '') + '.');
@@ -417,7 +431,7 @@
   function closeSheet() { hideSheet(sync); }
   async function useDemo() {
     var p = JSON.parse(JSON.stringify(DEMO)); p.made = new Date().toISOString(); p.loadedAt = p.made;
-    await kvSet('project', p); S.proj = p; S.entries = await allEntries(p.project.id);
+    await kvSet('project', p); S.proj = p; S.entries = await allEntries(p.project.id); S.gone = (await kvGet('gone:' + p.project.id)) || [];
     S.me = (await kvGet('me:' + p.project.id)) || { name: 'Sam Rivers', handle: 'SR' }; await kvSet('me:' + p.project.id, S.me);
     if (!S.entries.length) await seedDemo();
     closeSheet(); S.view = 'days'; render();
@@ -514,7 +528,9 @@
     else if (act === 'lastline') { var bx2 = $('box'); bx2.value = bx2.value.replace(/\s*$/, '') + ' @' + S.lastLine.itp + ' ' + S.lastLine.line; S.draft = bx2.value; bx2.focus(); reads(); }
     else if (act === 'unloc') { S.loc = null; await kvSet('loc', null); renderDay(); }
     else if (act === 'cancel') { S.edit = null; S.as = null; renderDay(); }
-    else if (act === 'delete') { var dl = S.edit; if (!confirm('Delete this line?')) return; var gel = document.querySelector('[data-e="' + dl + '"]'); if (gel && MOTION) { gel.style.height = gel.offsetHeight + 'px'; void gel.offsetWidth; gel.classList.add('gone'); await new Promise(function (r) { setTimeout(r, 200); }); } S.entries = S.entries.filter(function (x) { return x.id !== dl; }); await delEntry(dl); S.edit = null; renderDay(); toast('Deleted'); }
+    else if (act === 'delete') { var dl = S.edit; if (!confirm('Delete this line?')) return; var gel = document.querySelector('[data-e="' + dl + '"]'); if (gel && MOTION) { gel.style.height = gel.offsetHeight + 'px'; void gel.offsetWidth; gel.classList.add('gone'); await new Promise(function (r) { setTimeout(r, 200); }); } var dx = S.entries.filter(function (x) { return x.id === dl; })[0]; S.entries = S.entries.filter(function (x) { return x.id !== dl; }); await delEntry(dl);
+      if (dx && dx.shippedAt) { S.gone = (S.gone || []).concat([{ id: dl, day: dx.day }]); await kvSet('gone:' + S.proj.project.id, S.gone); }   // shipped already: BTC takes it out next ship
+      S.edit = null; renderDay(); toast(dx && dx.shippedAt ? 'Deleted. Ship again to take it out of BTC.' : 'Deleted'); }
     else if (act === 'load') $('proj-in').click();
     else if (act === 'me') pickMe();
     else if (act === 'demo') useDemo();
@@ -533,7 +549,7 @@
     var p = await kvGet('project');
     if (!p) { H.ready = true; history.replaceState({ walk: 'root' }, ''); await useDemo(); return; }
     S.proj = p; S.entries = await allEntries(p.project.id);
-    S.me = (await kvGet('me:' + p.project.id)) || null; S.loc = (await kvGet('loc')) || null; S.lastLine = (await kvGet('lastLine:' + p.project.id)) || null;
+    S.me = (await kvGet('me:' + p.project.id)) || null; S.loc = (await kvGet('loc')) || null; S.lastLine = (await kvGet('lastLine:' + p.project.id)) || null; S.gone = (await kvGet('gone:' + p.project.id)) || [];
     H.ready = true; history.replaceState({ walk: 'root' }, ''); render();
     if (!S.me && !p.demo) pickMe();
   })();
