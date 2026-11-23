@@ -6,7 +6,7 @@
    (⋮ › Load project). No server, nothing sent anywhere else. */
 'use strict';
 (function () {
-  var VERSION = '1.0';
+  var VERSION = '1.1';
   var FORMAT = 'btcwalk', PFORMAT = 'btcproject';
 
   // ---------- the demo job (generic) ----------
@@ -195,6 +195,10 @@
     grow(); reads();
     var fd = $('find-day'); if (fd) { fd.oninput = function () { S.find = fd.value; var pos = fd.selectionStart; renderDay(); var f2 = $('find-day'); f2.focus(); f2.setSelectionRange(pos, pos); }; }
     var chat = $('chat'); if (!q) chat.scrollTop = chat.scrollHeight;
+    // keyboard up or down: the chat gets shorter or taller; if you were at the newest line, stay there (1.1)
+    S.stick = !q; chat.onscroll = function () { S.stick = chat.scrollHeight - chat.scrollTop - chat.clientHeight < 40; };
+    if (window.ResizeObserver) new ResizeObserver(function () { if (S.stick) chat.scrollTop = chat.scrollHeight; }).observe(chat);
+    sync();
   }
   function grow() { var b = $('box'); if (!b) return; b.style.height = 'auto'; b.style.height = Math.min(140, b.scrollHeight + 2) + 'px'; }
   function reads() {
@@ -277,6 +281,7 @@
           return '<button type="button" class="res" data-jump="' + esc(e.id) + '"><span class="tm">' + hm(e.time) + '</span><span style="display:flex;flex-direction:column;gap:3px"><span style="font-size:15px"><span class="' + dot + '">●</span> ' + mk(e.text) + (e.action ? ' <b>→ ' + mk(e.action) + '</b>' : '') + (e.who ? ' @' + esc(e.who) : '') + '</span>' + (where || e.photo ? '<span class="e-m">' + esc(where) + (e.photo ? (where ? ' · ' : '') + '▣ photo' : '') + '</span>' : '') + '</span></button>';
         }).join('');
       }).join('') + (!days.length ? '<div class="empty">' + (q ? 'Nothing matches “' + esc(S.findAll) + '”.' : 'Type to search every day. <b>flow-ons</b>, <b>actions</b> or <b>@NH</b> work too.') + '</div>' : '') + '</div></div>';
+    sync();
     var fa = $('find-all'); fa.oninput = function () { S.findAll = fa.value; var pos = fa.selectionStart; renderFindAll(); var f2 = $('find-all'); f2.focus(); f2.setSelectionRange(pos, pos); };
     if (!S.findAll) fa.focus();
   }
@@ -351,8 +356,8 @@
       '<div class="sec">HOW TO WRITE</div><p><b>plinth moved 25 mm ; shop drawing 25 mm shorter</b> is a flow-on (or use --). <b>@NH</b> makes it NH’s action; <b>P1</b>, <b>fri</b>, <b>28-11</b> set priority and due. <b>@SBR 1</b> or <b>@ITP-06</b> tags where it is; <b>at SBR 1</b> on its own moves you there. Tap <b>LOG AS</b> to change the type.</p>' +
       '<p class="mono" style="font-size:11px">BTC Walk ' + VERSION + '</p>');
   }
-  function sheet(html) { var s = $('sheet'); s.innerHTML = '<div class="sheet" role="dialog" aria-modal="true">' + html + '</div>'; s.hidden = false; }
-  function closeSheet() { var s = $('sheet'); s.hidden = true; s.innerHTML = ''; }
+  function sheet(html) { var s = $('sheet'); s.innerHTML = '<div class="sheet" role="dialog" aria-modal="true">' + html + '</div>'; s.hidden = false; sync(); }
+  function closeSheet() { var s = $('sheet'); s.hidden = true; s.innerHTML = ''; sync(); }
   async function useDemo() {
     var p = JSON.parse(JSON.stringify(DEMO)); p.made = new Date().toISOString(); p.loadedAt = p.made;
     await kvSet('project', p); S.proj = p; S.entries = await allEntries(p.project.id);
@@ -381,7 +386,35 @@
     $('proj').textContent = (S.proj.project.code || S.proj.project.name || '') + ' ▾';
     $('find').classList.toggle('on', S.view === 'findall');
     if (S.view === 'day') renderDay(); else if (S.view === 'findall') renderFindAll(); else renderDays();
+    sync();
   }
+
+  // ---------- Back (1.1) ----------
+  // The phone's Back steps through the app: it closes a sheet, an edit or the day's search first, then takes you from a day
+  // (or search) to the days. On the days, Back once says "Press back again to leave"; a second Back leaves. Each open layer
+  // is one history entry above a guard entry; sync() keeps the count in step with what's open after every draw.
+  var H = { n: 0, guard: false, skip: 0, leaving: null };
+  function layers() { return (S.view !== 'days' ? 1 : 0) + ($('sheet').hidden ? 0 : 1) + (S.view === 'day' && S.edit ? 1 : 0) + (S.view === 'day' && S.findOpen ? 1 : 0); }
+  function sync() {
+    if (!H.ready) return;
+    if (!H.guard) { history.pushState({ walk: 'guard' }, ''); H.guard = true; }
+    var want = layers();
+    while (H.n < want) { history.pushState({ walk: 'layer' }, ''); H.n++; }
+    if (H.n > want) { H.skip++; history.go(want - H.n); H.n = want; }
+  }
+  function closeTop() {
+    if (!$('sheet').hidden) { var s = $('sheet'); s.hidden = true; s.innerHTML = ''; return; }
+    if (S.view === 'day' && S.edit) { S.edit = null; S.as = null; renderDay(); return; }
+    if (S.view === 'day' && S.findOpen) { S.findOpen = false; S.find = ''; renderDay(); return; }
+    if (S.view !== 'days') { S.view = 'days'; S.edit = null; S.findOpen = false; S.find = ''; render(); }
+  }
+  window.addEventListener('popstate', function () {
+    if (H.skip) { H.skip--; return; }
+    if (H.n > 0) { H.n--; closeTop(); sync(); return; }
+    // the guard went: one more Back leaves the app
+    H.guard = false; toast('Press back again to leave');
+    clearTimeout(H.leaving); H.leaving = setTimeout(function () { if (!H.guard) { history.pushState({ walk: 'guard' }, ''); H.guard = true; } }, 2600);
+  });
   function openDay(d) { S.view = 'day'; S.day = d; S.find = ''; S.findOpen = false; S.edit = null; S.as = null; render(); }
 
   document.addEventListener('click', async function (ev) {
@@ -431,11 +464,17 @@
     try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) { /* best effort */ }
     if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(function () { /* offline cache is a bonus */ });
     var p = await kvGet('project');
-    if (!p) { await useDemo(); return; }
+    if (!p) { H.ready = true; history.replaceState({ walk: 'root' }, ''); await useDemo(); return; }
     S.proj = p; S.entries = await allEntries(p.project.id);
     S.me = (await kvGet('me:' + p.project.id)) || null; S.loc = (await kvGet('loc')) || null;
-    render();
+    H.ready = true; history.replaceState({ walk: 'root' }, ''); render();
     if (!S.me && !p.demo) pickMe();
   })();
+  // The keyboard (1.1): the app shrinks to the space above it instead of being pushed up. Android does it from the viewport
+  // tag (interactive-widget=resizes-content); iPhone overlays the keyboard, so the app follows the visible area itself.
+  if (window.visualViewport) {
+    var fit = function () { var v = window.visualViewport; document.body.style.height = v.height + 'px'; document.body.style.transform = v.offsetTop ? 'translateY(' + v.offsetTop + 'px)' : ''; };
+    window.visualViewport.addEventListener('resize', fit); window.visualViewport.addEventListener('scroll', fit); fit();
+  }
   window.BTCWalk = { parse: parse, state: S, version: VERSION, loadProjectFile: loadProjectFile };
 })();

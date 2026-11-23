@@ -1,6 +1,6 @@
 // BTC Walk: keeps the app's own files on the phone so it opens with no signal. Your lines live in the app's storage, not here.
-const CACHE = 'btc-walk-1.0';
-const FILES = ['./', 'index.html', 'app.js?v=1', 'styles.css?v=1', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'];
+const CACHE = 'btc-walk-1.1';
+const FILES = ['./', 'index.html', 'app.js?v=2', 'styles.css?v=2', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'];
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', (e) => { e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener('fetch', (e) => {
