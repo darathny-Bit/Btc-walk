@@ -4,7 +4,7 @@ How BTC Walk should look and feel. It is a site diary engineers keep on their ph
 reach for because it feels good and pays them back, not because it nags or rewards them. No points, no leaderboards,
 nothing that feels like a game of chance.
 
-The concept this describes: **Night shift** (four phone screens: a day on site, your week, ship it, pull-down stretch).
+Built in BTC Walk 2.0. The concept it came from: **Night shift** (four phone screens: a day on site, your week, ship it, pull-down stretch).
 
 ## Principles
 

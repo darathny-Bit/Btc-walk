@@ -6,7 +6,7 @@
    (⋮ › Load project). No server, nothing sent anywhere else. */
 'use strict';
 (function () {
-  var VERSION = '1.9';
+  var VERSION = '2.0';
   var FORMAT = 'btcwalk', PFORMAT = 'btcproject';
 
   // ---------- the demo job (generic) ----------
@@ -58,7 +58,14 @@
   function dayLabel(s) { var d = dayDate(s); return WD[d.getDay()] + ' ' + d.getDate() + ' ' + MO[d.getMonth()]; }
   function hm(iso) { var d = new Date(iso); return isNaN(d) ? '' : pad(d.getHours()) + ':' + pad(d.getMinutes()); }
   var toastT = null;
-  function toast(msg, bad) { var t = $('toast'); t.textContent = msg; t.className = 'toast' + (bad ? ' bad' : ''); t.hidden = false; void t.offsetWidth; t.classList.add('pop'); clearTimeout(toastT); toastT = setTimeout(function () { t.hidden = true; }, bad ? 5000 : 2600); }
+  // A quiet pill at the bottom; with Undo when the last thing can be taken back (2.0: mistakes cost nothing).
+  var toastUndo = null;
+  function toast(msg, bad, undo) {
+    var t = $('toast'); toastUndo = undo || null;
+    t.innerHTML = '<span class="tt">' + esc(msg) + '</span>' + (undo ? '<button type="button" class="tu" data-act="undo">' + esc(undo.label || 'Undo') + '</button>' : '');
+    t.className = 'toast' + (bad ? ' bad' : ''); t.hidden = false; void t.offsetWidth; t.classList.add('pop'); clearTimeout(toastT);
+    toastT = setTimeout(function () { t.hidden = true; toastUndo = null; }, bad ? 5000 : undo ? 4000 : 2400);
+  }
   function uid() { return (S.me ? S.me.handle : 'X') + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7); }
 
   // ---------- reading a line ----------
@@ -161,27 +168,40 @@
     });
   }
   function counts(es) { var c = { note: 0, flowon: 0, action: 0, itp: 0, photo: 0 }; es.forEach(function (e) { c[e.type] = (c[e.type] || 0) + 1; c.photo += pics(e).length; }); return c; }
-  function dotsRow(c) { return '<span class="dots-row"><span><span class="dot-n">●</span> ' + c.note + '</span><span><span class="dot-f">●</span> ' + c.flowon + '</span><span><span class="dot-a">●</span> ' + c.action + '</span>' + (c.itp ? '<span><span class="dot-i">●</span> ' + c.itp + '</span>' : '') + (c.photo ? '<span class="muted">▣ ' + c.photo + '</span>' : '') + '</span>'; }
-  var RESHIP = '<span class="flag">✎ CHANGED · RESHIP</span>';
-  var FLAG = '<span class="flag"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1F1A10" stroke-width="2.6" aria-hidden="true"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg>NOT SHIPPED</span>';
+  function dotsRow(c) { return '<span class="dots-row"><span><span class="dot-n">●</span>' + c.note + '</span><span><span class="dot-f">●</span>' + c.flowon + '</span><span><span class="dot-a">●</span>' + c.action + '</span>' + (c.itp ? '<span><span class="dot-i">●</span>' + c.itp + '</span>' : '') + (c.photo ? '<span class="muted">▣ ' + c.photo + '</span>' : '') + '</span>'; }
+  var RESHIP = '<span class="flag">✎ Changed · reship</span>';
+  var FLAG = '<span class="flag"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke-width="2.6" aria-hidden="true"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg>Not shipped</span>';
+  var TICK = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>';
+  function monday(d) { var x = dayDate(d), k = (x.getDay() + 6) % 7; x.setDate(x.getDate() - k); return ymd(x); }
+  function weekNo(d) { var x = dayDate(d); x.setDate(x.getDate() + 3 - (x.getDay() + 6) % 7); var w1 = new Date(x.getFullYear(), 0, 4, 12); return 1 + Math.round(((x - w1) / 864e5 - 3 + (w1.getDay() + 6) % 7) / 7); }
+  function weekOf(d) { var m = monday(d); return { from: m, to: addDays(m, 6), es: S.entries.filter(function (e) { return e.day >= m && e.day <= addDays(m, 6); }) }; }
+  function greet() { var h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'; }
+  function firstName() { return S.me && S.me.name ? String(S.me.name).split(' ')[0] : ''; }
+  function itpLinesDone(es) { var m = {}; es.forEach(function (e) { if (e.type === 'itp' && e.itp && e.line) m[e.itp + ' ' + e.line] = 1; }); return Object.keys(m).length; }
 
   function renderDays() {
     var ds = daysOf(), t = today(), waiting = ds.filter(function (d) { return d.unshipped; }), old = ds.filter(function (d) { return d.unshipped && d.day < t; });
     var age = S.proj.made && !S.proj.demo ? Math.floor((Date.now() - new Date(S.proj.made)) / 864e5) : 0;
-    var html = '';
+    var wk = weekOf(t), wc = counts(wk.es), fn = firstName();
+    var html = '<div class="hello"><div class="k">Week ' + weekNo(t) + ' · ' + dayDate(wk.from).getDate() + '–' + dayDate(wk.to).getDate() + ' ' + MO[dayDate(wk.to).getMonth()] + '</div><h1>' + greet() + (fn ? ',<br><span>' + esc(fn) + '.</span>' : '.') + '</h1></div>' +
+      '<div class="stats"><button type="button" class="stat" data-act="recap"><b>' + wk.es.length + '</b><span>lines this week</span></button><button type="button" class="stat" data-act="recap"><b>' + wc.photo + '</b><span>photos</span></button><button type="button" class="stat i" data-act="evidence"><b>' + itpLinesDone(wk.es) + '</b><span>ITP lines</span></button></div>';
     if (S.proj.demo) html += '<div class="bar-info">Demo job (made-up names). Load your job’s project file in ⋮ › Load project. Nothing leaves this phone until you ship.</div>';
     else if (age >= 7) html += '<div class="bar-warn">Project file is ' + age + ' days old<button type="button" data-act="load">Reload</button></div>';
-    var chg = ds.filter(function (d) { return d.changed; });
+    var chg = ds.filter(function (d) { return d.changed; }), today0 = ds.filter(function (d) { return d.day === t && d.unshipped; })[0];
     if (chg.length) html += '<div class="bar-warn">' + (chg.length === 1 ? (chg[0].day === t ? 'Today' : dayLabel(chg[0].day)) + ' changed' : chg.length + ' days changed') + ' since you shipped<button type="button" data-act="ship">Ship again</button></div>';
     else if (old.length) html += '<div class="bar-warn">' + (old.length === 1 ? dayLabel(old[0].day) + ' isn’t' : old.length + ' days aren’t') + ' shipped yet<button type="button" data-act="ship">Ship now</button></div>';
+    else if (ds.length && !waiting.length) html += '<div class="allclear"><i>' + TICK.replace('currentColor', '#7BE0A6') + '</i><div><b>All clear</b><span>Everything is shipped. Nothing waiting.</span></div></div>';
+    if (ds.length) html += '<div class="tools"><button type="button" class="tool i" data-act="evidence"><b>Evidence</b><span>Photos by ITP line</span></button><button type="button" class="tool" data-act="recap"><b>This week</b><span>Your week on the record</span></button></div>';
     var cutoff = addDays(t, -6), recent = ds.filter(function (d) { return d.day >= cutoff; }), earlier = ds.filter(function (d) { return d.day < cutoff; });
     var card = function (d) {
-      var c = counts(d.entries), isT = d.day === t;
-      return '<button type="button" class="day' + (isT ? ' today' : '') + (d.unshipped && !isT ? ' unshipped' : '') + '" data-day="' + d.day + '"><span class="day-h"><span class="day-d">' + (isT ? 'Today · ' : '') + esc(dayLabel(d.day)) + '</span>' +
-        (d.changed ? RESHIP : isT ? (d.unshipped ? '<span class="tag live">LIVE</span>' : '<span class="tag sent">✓ Sent</span>') : d.unshipped ? FLAG : '<span class="tag sent">✓ Sent</span>') + '</span>' + dotsRow(c) + '</button>';
+      var c = counts(d.entries), isT = d.day === t, dd = dayDate(d.day);
+      var where = {}; d.entries.forEach(function (e) { var w = e.location || e.area; if (w) where[w] = 1; }); where = Object.keys(where).slice(0, 2).join(' · ');
+      return '<button type="button" class="day' + (isT ? ' today' : '') + (d.unshipped && !isT ? ' unshipped' : '') + '" data-day="' + d.day + '"><span class="day-n"><small>' + WD[dd.getDay()].toUpperCase() + '</small><b>' + dd.getDate() + '</b></span>' +
+        '<span class="day-b"><span class="day-h"><span class="day-d">' + (isT ? 'Today' : esc(dayLabel(d.day))) + (where ? ' · ' + esc(where) : '') + '</span>' +
+        (d.changed ? RESHIP : isT ? (d.unshipped ? '<span class="tag live">Live</span>' : '<span class="tag sent">' + TICK + ' Sent</span>') : d.unshipped ? FLAG : '<span class="tag sent">' + TICK + ' Sent</span>') + '</span>' + dotsRow(c) + '</span></button>';
     };
-    if (recent.length) html += '<div class="kick">THIS WEEK</div>' + recent.map(card).join('');
-    if (earlier.length) html += S.showEarlier ? '<div class="kick">EARLIER</div>' + earlier.map(card).join('') : '<button type="button" class="day" data-act="earlier"><span class="muted small">Earlier · ' + earlier.length + ' day' + (earlier.length > 1 ? 's' : '') + (earlier.some(function (d) { return d.unshipped; }) ? '' : ', all sent') + ' ▸</span></button>';
+    if (recent.length) html += '<div class="kick">This week</div>' + recent.map(card).join('');
+    if (earlier.length) html += S.showEarlier ? '<div class="kick">Earlier</div>' + earlier.map(card).join('') : '<button type="button" class="day" data-act="earlier"><span class="muted small">Earlier · ' + earlier.length + ' day' + (earlier.length > 1 ? 's' : '') + (earlier.some(function (d) { return d.unshipped; }) ? '' : ', all sent') + ' ▸</span></button>';
     if (!ds.length) html += '<div class="empty"><b>Nothing logged yet.</b><br>Start the day and type: a note, a photo, a clash (<b>what changed ; what next</b>) or an action (<b>@person</b>). A day you don’t log anything has no card.</div>';
     var hasT = ds.some(function (d) { return d.day === t; });
     main.innerHTML = '<div class="scroll"><div class="pad">' + html + '</div></div><div class="foot"><button type="button" class="btn primary" data-act="today">' + (hasT ? 'Open today' : '＋ Start day') + '</button>' +
@@ -218,6 +238,22 @@
       '<button type="button" class="pin-x del" data-act="delete" aria-label="Delete this line">' + BIN + '</button>' +
       '<button type="button" class="pin-x" data-act="cancel" aria-label="Stop editing">×</button></div>';
   }
+  // The day opens with its name and totals; a place heading starts each stretch at one place (2.0).
+  function dayHead(d, es) {
+    var c = counts(es), t = today(), dd = dayDate(d);
+    var chip = function (cls, n, w) { return n ? '<span><i class="' + cls + '"></i>' + n + ' ' + w + '</span>' : ''; };
+    return '<div class="dayhead"><div class="k">' + (d === t ? 'Today' : d === addDays(t, -1) ? 'Yesterday' : dd.getDate() + ' ' + MO[dd.getMonth()] + ' ' + dd.getFullYear()) + '</div><h1>' + ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dd.getDay()] + '</h1>' +
+      (es.length ? '<div class="chips">' + chip('dot-n', c.note, 'note' + (c.note === 1 ? '' : 's')) + chip('dot-f', c.flowon, 'clash' + (c.flowon === 1 ? '' : 'es')) + chip('dot-a', c.action, 'action' + (c.action === 1 ? '' : 's')) + chip('dot-i', c.itp, 'ITP') + (c.photo ? '<span>▣ ' + c.photo + ' photo' + (c.photo === 1 ? '' : 's') + '</span>' : '') + '</div>' : '') + '</div>';
+  }
+  function placeOf(e) { return e.location || ''; }
+  function withPlaces(list, q) {
+    var last = null;
+    return list.map(function (e) {
+      var p = placeOf(e), h = '';
+      if (!q && p !== last && p) h = '<div class="place"><i></i>' + esc(p) + ' · from ' + hm(e.time) + '</div>';
+      last = p; return h + entryHtml(e, q);
+    }).join('');
+  }
   function renderDay() {
     var d = S.day, es = S.entries.filter(function (e) { return e.day === d; }).sort(function (a, b) { return a.time < b.time ? -1 : 1; });
     var q = S.find.trim().toLowerCase(), shown = q ? es.filter(function (e) { return matches(e, q); }) : es;
@@ -227,12 +263,12 @@
       '<span class="t"><b>' + (d === today() ? 'Today · ' : '') + esc(dayLabel(d)) + '</b><span>' + esc(S.proj.project.code || '') + ' · ' + es.length + ' line' + (es.length === 1 ? '' : 's') + ' · ' + (es.length ? (un ? 'not shipped' : 'sent') : 'nothing yet') + '</span></span>' +
       '<button type="button" class="icon' + (S.findOpen ? ' on' : '') + '" data-act="findday" aria-label="Search this day"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg></button></div>' +
       (S.findOpen ? '<div class="findbar"><input type="search" id="find-day" placeholder="Search this day" value="' + esc(S.find) + '" aria-label="Search this day"><span>' + (q ? shown.length + ' of ' + es.length : '') + '</span></div>' : '') +
-      '<div class="chat" id="chat">' + (q && shown.length < es.length ? '<span class="note-c">' + (es.length - shown.length) + ' lines hidden · tap one to see it in the chat</span>' : '') +
-      (shown.length ? shown.map(function (e) { return entryHtml(e, q); }).join('') : '<div class="empty">' + (q ? 'Nothing matches.' : 'Type below: a note, a photo, a clash (<b>what changed ; what next</b>) or an action (<b>@person</b>, <b>P1</b>, <b>fri</b>). <b>at SBR 1</b> says where you are.') + '</div>') + '</div>' +
-      (loc ? '<div class="loc"><span class="l">AT</span><b>' + esc(loc) + '</b><button type="button" data-act="unloc" aria-label="Clear where you are">×</button></div>' : '') +
+      '<div class="chat" id="chat">' + (q ? '' : dayHead(d, es)) + (q && shown.length < es.length ? '<span class="note-c">' + (es.length - shown.length) + ' lines hidden · tap one to see it in the chat</span>' : '') +
+      (shown.length ? withPlaces(shown, q) : '<div class="empty">' + (q ? 'Nothing matches.' : 'Type below: a note, a photo, a clash (<b>what changed ; what next</b>) or an action (<b>@person</b>, <b>P1</b>, <b>fri</b>). <b>at SBR 1</b> says where you are.') + '</div>') + '</div>' +
+      (loc ? '<div class="loc"><span class="l">At</span><b>' + esc(loc) + '</b><button type="button" data-act="unloc" aria-label="Clear where you are">×</button></div>' : '') +
       '<div class="comp"><div class="reads" id="reads"></div><div class="sug" id="sug"></div>' + (S.photos.length ? '<div class="thumbs">' + S.photos.map(function (p, i) { return '<span class="thumb"><img src="' + p + '" alt="Photo ' + (i + 1) + '"><button type="button" data-act="nophoto" data-i="' + i + '" aria-label="Remove photo ' + (i + 1) + '">×</button></span>'; }).join('') + '<span class="thumbs-t">' + S.photos.length + ' photo' + (S.photos.length === 1 ? '' : 's') + (S.edit ? ' on this line' : ' go with the next line') + '</span></div>' : '') +
       (S.edit ? pinHtml() : '') + '<div class="comp-row"><button type="button" class="cam" data-act="photo" aria-label="Add a photo"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="6" width="18" height="14" rx="2"/><circle cx="12" cy="13" r="3.5"/><path d="M9 6l1.5-2h3L15 6"/></svg></button><button type="button" class="cam" data-act="pics" aria-label="Add photos from the phone"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-8 8"/></svg></button>' +
-      '<textarea id="box" rows="1" placeholder="Note, clash (;) or @action…" aria-label="Write a line" enterkeyhint="send"></textarea><button type="button" class="send" id="send" data-act="send">' + (S.edit ? 'Save' : 'Send') + '</button></div></div>';
+      '<textarea id="box" rows="1" placeholder="Log it…" aria-label="Write a line" enterkeyhint="send"></textarea><button type="button" class="send" id="send" data-act="send" aria-label="' + (S.edit ? 'Save' : 'Send') + '">' + (S.edit ? 'Save' : 'Send') + (S.edit ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>' : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg>') + '</button></div></div>';
     var box = $('box');
     if (S.edit) { var ed = S.entries.filter(function (e) { return e.id === S.edit; })[0]; if (ed) box.value = ed.raw || ''; }
     else if (S.draft) box.value = S.draft;
@@ -262,7 +298,7 @@
         .filter(function (x) { return !k || key(x.put).indexOf(k) === 0 || key(x.label).indexOf(k) === 0; }).slice(0, 12);
       if (list.length === 1 && k && (key(list[0].put) === k || key(list[0].label) === k)) list = [];   // already typed in full
       sg.innerHTML = list.map(function (x) { return '<button type="button" data-put="' + esc(x.put) + '">' + esc(x.label) + '<small>' + esc(x.sub) + '</small></button>'; }).join('');
-    } else sg.innerHTML = '';
+    } else sg.innerHTML = v.trim() || S.edit ? '' : smart();
     if (!v.trim() && !S.photos.length) { r.innerHTML = ''; return; }
     if (p.move) { r.innerHTML = 'Moves you to <span class="chip">' + esc(p.move.name) + '</span>'; return; }
     var type = S.as || p.type;
@@ -274,6 +310,22 @@
       (p.notFound.length ? '<span class="chip nf">@' + esc(p.notFound.join(' @')) + ' not found</span>' : '') +
       (type === 'itp' ? (p.itp && p.line ? '<span class="chip">' + esc(p.line) + ' ' + esc((lineOf(p.itp, p.line) || {}).text || '') + '</span>'
         : (S.lastLine && !p.itp ? '<button type="button" class="chip itp" data-act="lastline">＋ ' + esc(S.lastLine.itp + ' ' + S.lastLine.line) + '</button>' : '') + '<span class="chip warn">' + (p.itp ? 'no line: ' : '') + 'sorted on the PC</span>') : '');
+  }
+  // It remembers for you (2.0): with the box empty, the likely next thing is one tap away: the next line on the ITP you
+  // used last, the people you tag most, and the start words.
+  function nextLine() {
+    if (!S.lastLine) return null;
+    var it = itpByCode(S.lastLine.itp), ls = it && it.lines || [], i = ls.map(function (l) { return l.no; }).indexOf(S.lastLine.line);
+    return i >= 0 && i + 1 < ls.length ? { itp: it.code, line: ls[i + 1].no } : null;
+  }
+  function smart() {
+    var out = [], nl = nextLine(), seen = {};
+    if (nl) out.push('<button type="button" class="hot" data-ins="@' + esc(nl.itp + ' ' + nl.line) + ' ">@' + esc(nl.itp + ' ' + nl.line) + '</button>');
+    if (S.lastLine) out.push('<button type="button" data-ins="@' + esc(S.lastLine.itp + ' ' + S.lastLine.line) + ' ">@' + esc(S.lastLine.itp + ' ' + S.lastLine.line) + '</button>');
+    var tally = {}; S.entries.forEach(function (e) { String(e.who || '').split(/\s+/).filter(Boolean).forEach(function (h) { if (h !== 'all') tally[h] = (tally[h] || 0) + 1; }); });
+    Object.keys(tally).sort(function (a, b) { return tally[b] - tally[a]; }).slice(0, 2).forEach(function (h) { if (!seen[h]) { seen[h] = 1; out.push('<button type="button" data-ins=" @' + esc(h) + ' ">@' + esc(h) + '</button>'); } });
+    ['clash.', 'action.', 'ITP.'].forEach(function (w) { out.push('<button type="button" data-ins="' + w + ' ">' + w + '</button>'); });
+    return out.join('');
   }
   function matches(e, q) {
     if (q === 'clashes' || q === 'flowons' || q === 'clash') return e.type === 'flowon';
@@ -300,6 +352,9 @@
       location: S.loc ? S.loc.name : '', priority: p.priority, due: p.due, photos: S.photos.slice(), edited: false, shipped: false, notFound: p.notFound, there: !!p.there };
     S.entries.push(en); await putEntry(en);
     S.draft = ''; S.photos = []; S.as = null; S.fresh = en.id; buzz(8); renderDay(); S.fresh = null;
+    var np = pics(en).length;
+    toast(type === 'itp' ? (en.itp && en.line ? 'Logged on ' + en.itp + ' ' + en.line : 'Logged, to sort on the PC') + (np ? ' · ' + np + ' photo' + (np === 1 ? '' : 's') : '') : 'Logged' + (np ? ' · ' + np + ' photo' + (np === 1 ? '' : 's') : ''), false,
+      { label: 'Undo', fn: async function () { S.entries = S.entries.filter(function (x) { return x.id !== en.id; }); await delEntry(en.id); S.draft = raw; S.photos = pics(en).slice(); if (S.view === 'day') renderDay(); } });
   }
 
   // ---------- photos: shrunk on the phone (~200 KB) ----------
@@ -322,14 +377,14 @@
   // ---------- search every day ----------
   function renderFindAll() {
     var q = S.findAll.trim().toLowerCase(), f = S.filter;
-    var es = S.entries.filter(function (e) { return (f === 'all' || e.type === f) && (!q || matches(e, q)); }).sort(function (a, b) { return a.time < b.time ? 1 : -1; });
+    var es = S.entries.filter(function (e) { return (f === 'all' || (f === 'photo' ? pics(e).length > 0 : e.type === f)) && (!q || matches(e, q)); }).sort(function (a, b) { return a.time < b.time ? 1 : -1; });
     var byDay = {}; es.forEach(function (e) { (byDay[e.day] = byDay[e.day] || []).push(e); });
     var days = Object.keys(byDay).sort().reverse(), un = {}; daysOf().forEach(function (d) { un[d.day] = d.unshipped; });
-    main.innerHTML = '<div class="findbar" style="background:var(--panel);border-color:var(--line)"><button type="button" class="icon" data-act="back" aria-label="Back to days"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button><input type="search" id="find-all" placeholder="Search every day" value="' + esc(S.findAll) + '" aria-label="Search every day"></div>' +
-      '<div class="filters">' + [['all', 'All'], ['note', 'Notes'], ['flowon', 'Clashes'], ['action', 'Actions'], ['itp', 'ITP']].map(function (x) { return '<button type="button" data-filter="' + x[0] + '"' + (f === x[0] ? ' class="on"' : '') + '>' + x[1] + '</button>'; }).join('') + '</div>' +
+    main.innerHTML = '<div class="findbar"><button type="button" class="icon" data-act="back" aria-label="Back to days"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button><input type="search" id="find-all" placeholder="Search everything you’ve logged" value="' + esc(S.findAll) + '" aria-label="Search every day"></div>' +
+      '<div class="filters">' + [['all', 'All'], ['photo', 'Photos'], ['note', 'Notes'], ['flowon', 'Clashes'], ['action', 'Actions'], ['itp', 'ITP']].map(function (x) { return '<button type="button" data-filter="' + x[0] + '"' + (f === x[0] ? ' class="on"' : '') + '>' + x[1] + '</button>'; }).join('') + '</div>' +
       '<div class="scroll"><div class="pad" style="gap:0">' + (q || f !== 'all' ? '<div class="kick" style="padding-bottom:6px">' + es.length + ' line' + (es.length === 1 ? '' : 's') + ' on ' + days.length + ' day' + (days.length === 1 ? '' : 's') + '</div>' : '') +
       days.map(function (d) {
-        return '<div class="res-day">' + (d === today() ? 'Today · ' : '') + esc(dayLabel(d)) + (un[d] && d !== today() ? ' <span class="tag" style="color:var(--flow)">NOT SHIPPED</span>' : '') + '</div>' + byDay[d].map(function (e) {
+        return '<div class="res-day">' + (d === today() ? 'Today · ' : '') + esc(dayLabel(d)) + (un[d] && d !== today() ? ' <span class="tag" style="color:var(--flow-ink)">Not shipped</span>' : '') + '</div>' + byDay[d].map(function (e) {
           var dot = e.type === 'flowon' ? 'dot-f' : e.type === 'action' ? 'dot-a' : e.type === 'itp' ? 'dot-i' : 'dot-n', hlq = q && q.charAt(0) !== '@' ? q : '';
           var mk = function (s) { s = esc(s); if (!hlq) return s; return s.replace(new RegExp('(' + esc(hlq.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) + ')', 'ig'), '<mark>$1</mark>'); };
           var where = e.itp ? (e.area ? e.area + ' · ' : '') + e.itp : e.area || e.tag || '';
@@ -359,6 +414,18 @@
       $('sheet').querySelectorAll('[data-pick]').forEach(function (cb) { cb.onchange = function () { S.shipPick[cb.dataset.pick] = cb.checked; draw(); }; });
     };
     draw();
+  }
+  // The ship moment (2.0): a tick that draws itself, and where everything goes.
+  function shippedSheet(pick, es) {
+    var c = counts(es), ev = es.filter(function (e) { return e.type === 'itp'; }), evp = 0; ev.forEach(function (e) { evp += pics(e).length; });
+    var lines = ev.filter(function (e) { return e.itp && e.line; }).map(function (e) { return e.itp + ' ' + e.line; }).filter(function (x, i, a) { return a.indexOf(x) === i; });
+    var who = {}; es.forEach(function (e) { if (e.type === 'action') String(e.who || 'you').split(/\s+/).forEach(function (h) { who[S.me && h === S.me.handle ? 'you' : h] = 1; }); });
+    var row = function (col, label, sub, n) { return n ? '<div><span class="dotl" style="background:' + col + '"></span><span class="lt"><b>' + label + '</b>' + (sub ? '<span>' + esc(sub) + '</span>' : '') + '</span><span class="rv">' + n + '</span></div>' : ''; };
+    sheet('<div class="grip"></div><div class="shipped"><div class="tickc"><svg width="54" height="54" viewBox="0 0 52 52" role="img" aria-label="Shipped"><circle class="ring-d" cx="26" cy="26" r="23" fill="none" stroke="#D4FF3A" stroke-width="3"/><path class="tick-d" d="M15 27l7 7 15-16" fill="none" stroke="#D4FF3A" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>' +
+      '<h2>Shipped</h2><p>' + (pick.length === 1 ? (pick[0].day === today() ? 'Today' : esc(dayLabel(pick[0].day))) + ' is' : pick.length + ' days are') + ' on the way to BTC.<br>It lands in your diary on the PC, and stays on this phone too.</p></div>' +
+      '<div class="list">' + row('var(--note)', 'Notes', '', c.note) + row('var(--itp)', 'ITP evidence', evp ? evp + ' photo' + (evp === 1 ? '' : 's') + (lines.length ? ' → ' + lines.slice(0, 2).join(', ') + (lines.length > 2 ? '…' : '') : ' to sort on the PC') : '', c.itp) +
+      row('var(--flow)', 'Clashes', 'to Build’s register', c.flowon) + row('var(--act)', 'Actions', 'cards for ' + Object.keys(who).join(', '), c.action) + '</div>' +
+      '<button type="button" class="btn primary" data-act="closesheet" style="min-height:54px">Done</button>');
   }
   function fileName(pick) {
     var days = pick.map(function (d) { return d.day; }).sort(), code = (S.proj.project.code || 'BTC').replace(/[^A-Za-z0-9]+/g, '');
@@ -390,9 +457,9 @@
     var at = new Date().toISOString();
     for (var i = 0; i < es.length; i++) { es[i].shipped = true; es[i].shippedAt = at; await putEntry(es[i]); }
     if (gone.length) { S.gone = (S.gone || []).filter(function (g) { return !pickDays[g.day]; }); await kvSet('gone:' + S.proj.project.id, S.gone); }
-    S.shipPick = null; buzz([12, 60, 12]); closeSheet(); S.view = 'days'; render();
-    if (shared === 'saved') toast('The phone wouldn’t share it, so it’s in Downloads: attach ' + name + ' to an email to ship it.', true);
-    else toast('Shipped ' + pick.length + ' day' + (pick.length > 1 ? 's' : '') + '. It stays on this phone too.');
+    S.shipPick = null; buzz([12, 60, 12]); S.view = 'days'; render();
+    if (shared === 'saved') { closeSheet(); toast('The phone wouldn’t share it, so it’s in Downloads: attach ' + name + ' to an email to ship it.', true); return; }
+    shippedSheet(pick, es);
   }
 
   // ---------- project, you, settings ----------
@@ -419,8 +486,8 @@
       '<div class="list"><button type="button" data-act="load"><span class="lt"><b>Load project…</b><span>' + (p.demo ? 'The demo is loaded. Pick the file Build makes: ⋮ › Phone project file…' : 'Project file from ' + esc(made || '?') + '. Pick a newer one when the job changes.') + '</span></span></button>' +
       '<button type="button" data-act="me"><span class="lt"><b>You: ' + esc(S.me ? S.me.name : 'not picked') + '</b><span>Whose diary your days go into</span></span></button>' +
       (p.demo ? '' : '<button type="button" data-act="demo"><span class="lt"><b>Try the demo</b><span>A made-up job to practise on. Your job’s lines stay on the phone.</span></span></button>') + '</div>' +
-      '<div class="sec">ON THIS PHONE</div><p>' + n + ' line' + (n === 1 ? '' : 's') + ' for this job. Nothing leaves the phone until you ship. Keep BTC Walk on your Home Screen (Safari › Share › Add to Home Screen) so the phone keeps them.</p>' +
-      '<div class="sec">HOW TO WRITE</div><p><b>plinth moved 25 mm ; shop drawing 25 mm shorter</b> is a clash (or use --). <b>@NH</b> makes it NH’s action; <b>P1</b>, <b>fri</b>, <b>28-11</b> set priority and due. <b>@SBR 1</b> or <b>@ITP-06</b> tags where it is; <b>at SBR 1</b> on its own moves you there. Tap <b>LOG AS</b> to change the type.</p>' +
+      '<div class="sec">On this phone</div>' + (function () { var o = oldShipped(); return o.length ? '<div class="list"><button type="button" data-act="clearold"><span class="lt"><b>Free up space</b><span>Clear ' + o.length + ' shipped line' + (o.length === 1 ? '' : 's') + ' older than a month (' + (JSON.stringify(o).length / 1048576).toFixed(1) + ' MB). They’re safe in BTC.</span></span></button></div>' : ''; })() + '<p>' + n + ' line' + (n === 1 ? '' : 's') + ' for this job. Nothing leaves the phone until you ship. Keep BTC Walk on your Home Screen (Safari › Share › Add to Home Screen) so the phone keeps them.</p>' +
+      '<div class="sec">How to write</div><p><b>plinth moved 25 mm ; shop drawing 25 mm shorter</b> is a clash (or use --). <b>@NH</b> makes it NH’s action; <b>P1</b>, <b>fri</b>, <b>28-11</b> set priority and due. <b>@SBR 1</b> or <b>@ITP-06</b> tags where it is; <b>at SBR 1</b> on its own moves you there. Tap <b>LOG AS</b> to change the type.</p>' +
       '<p class="mono" style="font-size:11px">BTC Walk ' + VERSION + '</p>');
   }
   // Sheets rise from the bottom and slide away; drag one down to close it (1.3).
@@ -456,13 +523,141 @@
     for (var i = 0; i < es.length; i++) { S.entries.push(es[i]); await putEntry(es[i]); }
   }
 
+  // ---------- evidence by ITP line (2.0) ----------
+  // Every photo you've logged as ITP evidence, by ITP and line, from this phone alone: a ring for how many lines have
+  // some, a line's photos in a grid, full screen to show the engineer, Share to send them on.
+  function evOf(code, no) { return S.entries.filter(function (e) { return e.type === 'itp' && key(e.itp) === key(code) && (no == null || e.line === no); }).sort(function (a, b) { return a.time < b.time ? -1 : 1; }); }
+  function ring(done, all, size) {
+    var r0 = size / 2 - 5, c = 2 * Math.PI * r0, f = all ? done / all : 0;
+    return '<svg class="ring" width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '" role="img" aria-label="' + done + ' of ' + all + ' lines have evidence"><circle cx="' + size / 2 + '" cy="' + size / 2 + '" r="' + r0 + '" fill="none" stroke="#1B2124" stroke-width="' + (size > 50 ? 7 : 5) + '"/>' +
+      (done ? '<circle cx="' + size / 2 + '" cy="' + size / 2 + '" r="' + r0 + '" fill="none" stroke="#5CB8FF" stroke-width="' + (size > 50 ? 7 : 5) + '" stroke-linecap="round" stroke-dasharray="' + (c * f).toFixed(1) + ' ' + c.toFixed(1) + '" transform="rotate(-90 ' + size / 2 + ' ' + size / 2 + ')"/>' : '') +
+      (size > 50 ? '<text x="' + size / 2 + '" y="' + (size / 2 + 5) + '" text-anchor="middle" fill="#F2F4F3" font-family="Geist, sans-serif" font-weight="800" font-size="15">' + done + '/' + all + '</text>' : '') + '</svg>';
+  }
+  function allItps() { var out = []; (S.proj.areas || []).forEach(function (a) { (a.itps || []).forEach(function (i) { out.push({ area: a.name, it: i }); }); }); return out; }
+  function renderEvidence() {
+    var code = S.evItp, html = '', head;
+    if (!code) {
+      var list = allItps(), any = S.entries.some(function (e) { return e.type === 'itp'; });
+      head = '<span class="t"><b>Evidence</b><span>Photos by ITP line, from this phone</span></span>';
+      html = list.map(function (x) {
+        var ls = x.it.lines || [], ev = evOf(x.it.code), done = ls.filter(function (l) { return evOf(x.it.code, l.no).length; }).length, n = 0; ev.forEach(function (e) { n += pics(e).length; });
+        if (!ls.length && !ev.length) return '';
+        return '<button type="button" class="evrow" data-ev="' + esc(x.it.code) + '">' + ring(done, ls.length, 36) + '<span class="tx"><b>' + esc(x.it.code) + '</b> ' + esc(x.it.title || '') + '<small>' + esc(x.area) + ' · ' + done + ' of ' + ls.length + ' lines</small></span><span class="n' + (n ? '' : ' none') + '">' + (n ? n + ' photo' + (n === 1 ? '' : 's') : 'none yet') + '</span></button>';
+      }).join('');
+      var loose = S.entries.filter(function (e) { return e.type === 'itp' && !(e.itp && e.line); });
+      if (loose.length) html += '<div class="kick">To sort on the PC</div><div class="bar-info">' + loose.length + ' ITP photo line' + (loose.length === 1 ? '' : 's') + ' logged without an ITP line. Build sorts them when you ship.</div>';
+      if (!html) html = '<div class="empty"><b>No ITP evidence yet.</b><br>Log a photo with <b>@ITP-06 3.2</b> (or start with <b>ITP.</b>) and it shows up here by line.</div>';
+      else if (!any) html = '<div class="bar-info">Log a photo with <b>@ITP-06 3.2</b> and it lands on that line here.</div>' + html;
+    } else {
+      var it = itpByCode(code) || { code: code, title: '', lines: [] }, ls = it.lines || [], done = ls.filter(function (l) { return evOf(code, l.no).length; }).length, tot = 0;
+      evOf(code).forEach(function (e) { tot += pics(e).length; });
+      head = '<span class="t"><b>' + esc(it.code) + '</b><span>' + esc(it.title || '') + '</span></span>';
+      html = '<div class="ev-head">' + ring(done, ls.length, 64) + '<div><h1>Evidence</h1><p>' + done + ' of ' + ls.length + ' lines · ' + tot + ' photo' + (tot === 1 ? '' : 's') + ' from your phone</p></div></div>';
+      var extra = evOf(code).filter(function (e) { return e.line && !ls.some(function (l) { return l.no === e.line; }); }).map(function (e) { return e.line; }).filter(function (x, i, a) { return a.indexOf(x) === i; });
+      ls.concat(extra.map(function (n) { return { no: n, text: '' }; })).forEach(function (l) {
+        var es = evOf(code, l.no), ps = []; es.forEach(function (e) { pics(e).forEach(function (p) { ps.push({ src: p, e: e }); }); });
+        var on = S.evLine === l.no;
+        html += '<button type="button" class="evrow' + (on ? ' on' : '') + '" data-evl="' + esc(l.no) + '"><span class="no">' + esc(l.no) + '</span><span class="tx">' + esc(l.text || 'Line ' + l.no) + (es.length ? '<small>' + esc(es[es.length - 1].text || '') + '</small>' : '') + '</span><span class="n' + (ps.length ? '' : ' none') + '">' + (ps.length ? ps.length + ' photo' + (ps.length === 1 ? '' : 's') : 'none yet') + '</span>' + (ps.length ? TICK.replace('currentColor', '#7BE0A6') : '') + '</button>';
+        if (on && ps.length) {
+          S.evPhotos = ps;
+          html += '<div class="evgrid">' + ps.map(function (p, i) { return '<button type="button" data-ph="' + i + '" aria-label="Photo ' + (i + 1) + ' full screen"><img src="' + p.src + '" alt=""><span>' + hm(p.e.time) + '</span></button>'; }).join('') + '</div>' +
+            '<div class="evbtns"><button type="button" class="btn primary" data-ph="0">Show full screen</button><button type="button" class="btn" data-act="shareev">Share</button></div>';
+        }
+      });
+    }
+    main.innerHTML = '<div class="dhead">' + '<button type="button" class="icon" data-act="back" aria-label="Back"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>' + head + '</div><div class="scroll"><div class="pad">' + html + '</div></div>';
+  }
+  function viewer(i) {
+    var ps = S.evPhotos || [], p = ps[i]; if (!p) return; S.viewAt = i;
+    var v = $('viewer'); if (!v) { v = document.createElement('div'); v.id = 'viewer'; document.body.appendChild(v); }
+    v.className = 'viewer'; v.hidden = false;
+    v.innerHTML = '<img src="' + p.src + '" alt="Photo ' + (i + 1) + ' of ' + ps.length + '"><button type="button" class="vn p" data-act="vprev" aria-label="Previous photo"></button><button type="button" class="vn n" data-act="vnext" aria-label="Next photo"></button>' +
+      '<div class="vcap">' + esc(p.e.text || '') + '<small>' + esc((p.e.itp || '') + ' ' + (p.e.line || '')) + ' · ' + esc(dayLabel(p.e.day)) + ' ' + hm(p.e.time) + ' · ' + (i + 1) + ' of ' + ps.length + '</small></div><button type="button" class="vx" data-act="vclose" aria-label="Close">×</button>';
+    sync();
+  }
+  function viewerOpen() { var v = $('viewer'); return !!(v && !v.hidden); }
+  function closeViewer() { var v = $('viewer'); if (v) { v.hidden = true; v.innerHTML = ''; } sync(); }
+  async function shareEvidence() {
+    var ps = S.evPhotos || []; if (!ps.length) return;
+    var files = ps.map(function (p, i) { var b = atob(p.src.split(',')[1] || ''), a = new Uint8Array(b.length); for (var k = 0; k < b.length; k++) a[k] = b.charCodeAt(k); return new File([a], (S.evItp + ' ' + S.evLine + ' ' + (i + 1)).replace(/[^A-Za-z0-9 .-]+/g, '') + '.jpg', { type: 'image/jpeg' }); });
+    try {
+      if (navigator.canShare && navigator.canShare({ files: files })) await navigator.share({ files: files, title: S.evItp + ' ' + S.evLine, text: S.evItp + ' ' + S.evLine + ' · ' + files.length + ' photo' + (files.length === 1 ? '' : 's') });
+      else toast('This phone can’t share photos from here.', true);
+    } catch (e) { if (!e || e.name !== 'AbortError') toast('Could not share: ' + e.message, true); }
+  }
+
+  // ---------- the week's recap (2.0) ----------
+  function renderRecap() {
+    var t = today(), wk = weekOf(t), es = wk.es, c = counts(es), per = [], mx = 0;
+    for (var i = 0; i < 7; i++) { var d = addDays(wk.from, i), n = es.filter(function (e) { return e.day === d; }).length; if (i < 5 || n) { per.push({ d: d, n: n }); mx = Math.max(mx, n); } }
+    var busiest = per.slice().sort(function (a, b) { return b.n - a.n; })[0], places = {};
+    es.forEach(function (e) { var w = e.location || e.area; if (w) places[w] = (places[w] || 0) + 1; });
+    var top = Object.keys(places).sort(function (a, b) { return places[b] - places[a]; })[0];
+    var ds = daysOf().filter(function (d) { return d.day >= wk.from && d.day <= wk.to; }), waiting = ds.filter(function (d) { return d.unshipped; }).length;
+    var note = es.length ? 'Busiest day ' + ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayDate(busiest.d).getDay()] + (top ? ', mostly at ' + top : '') + '. ' + (waiting ? waiting + ' day' + (waiting === 1 ? '' : 's') + ' not shipped yet.' : 'Every day shipped.') : 'Nothing logged this week yet.';
+    var html = '<div class="hello"><div class="k">' + (dayDate(t).getDay() === 5 ? 'Friday · ' : '') + 'Week ' + weekNo(t) + '</div><h1>Your week,<br><span>on the record.</span></h1></div>' +
+      '<div class="recap"><div class="bars">' + per.map(function (p) { return '<div><div class="bh"><div class="b' + (p.n && p.n === mx ? ' top' : '') + '" style="height:' + (mx ? Math.max(4, Math.round(90 * p.n / mx)) : 4) + 'px"></div></div><small>' + WD[dayDate(p.d).getDay()].charAt(0) + '</small></div>'; }).join('') + '</div>' +
+      '<div class="rstats"><div><b>' + es.length + '</b><span>lines logged</span></div><div><b>' + c.photo + '</b><span>photos</span></div><div><b style="color:var(--itp)">' + itpLinesDone(es) + '</b><span>ITP lines evidenced</span></div><div><b style="color:var(--flow)">' + c.flowon + '</b><span>clashes caught early</span></div></div>' +
+      '<div class="rnote">' + esc(note) + '</div></div>' +
+      (waiting ? '<div class="bar-warn">' + waiting + ' day' + (waiting === 1 ? '' : 's') + ' waiting to ship<button type="button" data-act="ship">Ship</button></div>' : es.length ? '<div class="allclear"><i>' + TICK.replace('currentColor', '#7BE0A6') + '</i><div><b>All clear</b><span>Everything is shipped. Nothing waiting.</span></div></div>' : '');
+    main.innerHTML = '<div class="dhead noprint">' + '<button type="button" class="icon" data-act="back" aria-label="Back"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>' + '<span class="t"><b>This week</b><span>' + esc(dayLabel(wk.from)) + ' – ' + esc(dayLabel(wk.to)) + '</span></span></div><div class="scroll"><div class="pad">' + html + '</div></div>' +
+      '<div class="foot"><button type="button" class="btn" data-act="print">Share as PDF</button><button type="button" class="btn primary" data-act="back">Done</button></div>';
+  }
+
+  // ---------- free up space (2.0) ----------
+  function oldShipped() { var cut = addDays(today(), -30); return S.entries.filter(function (e) { return e.shipped && e.day < cut; }); }
+  async function clearOld() {
+    var es = oldShipped(); if (!es.length) { toast('Nothing to clear: no shipped days older than a month.'); return; }
+    var mb = JSON.stringify(es).length / 1048576;
+    if (!confirm('Clear ' + es.length + ' shipped line' + (es.length === 1 ? '' : 's') + ' older than a month (' + mb.toFixed(1) + ' MB)? They’re safe in BTC, but they’ll be gone from this phone.')) return;
+    for (var i = 0; i < es.length; i++) await delEntry(es[i].id);
+    var ids = {}; es.forEach(function (e) { ids[e.id] = 1; }); S.entries = S.entries.filter(function (e) { return !ids[e.id]; });
+    closeSheet(); render(); toast('Cleared ' + es.length + ' line' + (es.length === 1 ? '' : 's') + ' (' + mb.toFixed(1) + ' MB).');
+  }
+
+  // ---------- pull-down stretch (2.0) ----------
+  // Pull past the top or the bottom of a list and it stretches, with more resistance the further you go; let go and it
+  // springs back. Our own, so it feels the same on iPhone and Android (the lists scroll inside the app, where the phone's
+  // own stretch doesn't reach).
+  var st = null;
+  function stretchable() { main.querySelectorAll('.scroll > .pad, .chat').forEach(function (el) { el.classList.add('stretchy'); }); }
+  function resist(d) { var a = Math.abs(d), k = 140 * (1 - Math.exp(-a / 260)); return d < 0 ? -k : k; }
+  main.addEventListener('touchstart', function (ev) {
+    st = null; if (!MOTION || ev.touches.length !== 1 || sw) return;
+    var sc = ev.target.closest('.scroll, .chat'); if (!sc) return;
+    var el = sc.classList.contains('chat') ? sc : sc.firstElementChild; if (!el) return;
+    st = { sc: sc, el: el, y: ev.touches[0].clientY, x: ev.touches[0].clientX, d: 0, on: false };
+  }, { passive: true });
+  main.addEventListener('touchmove', function (ev) {
+    if (!st) return;
+    var y = ev.touches[0].clientY, dy = y - st.y, dx = ev.touches[0].clientX - st.x, sc = st.sc;
+    if (!st.on) {
+      if (Math.abs(dx) > Math.abs(dy)) { st = null; return; }
+      var top = sc.scrollTop <= 0 && dy > 4, bot = sc.scrollTop + sc.clientHeight >= sc.scrollHeight - 1 && dy < -4;
+      if (!top && !bot) return;
+      st.on = true; st.y = y; dy = 0; st.el.classList.remove('springback');
+    }
+    st.d = resist(dy);
+    if ((st.d > 0 && sc.scrollTop > 0) || (st.d < 0 && sc.scrollTop + sc.clientHeight < sc.scrollHeight - 1)) st.d = 0;
+    st.el.style.transform = st.d ? 'translateY(' + st.d.toFixed(1) + 'px)' : '';
+  }, { passive: true });
+  function letGo() {
+    if (!st) return; var el = st.el, was = st.on && st.d; st = null;
+    if (!was) return;
+    el.classList.add('springback'); el.style.transform = '';
+    setTimeout(function () { el.classList.remove('springback'); }, 480);
+  }
+  main.addEventListener('touchend', letGo, { passive: true });
+  main.addEventListener('touchcancel', letGo, { passive: true });
+
   // ---------- drawing ----------
   function render() {
     $('proj').textContent = (S.proj.project.code || S.proj.project.name || '') + ' ▾';
     $('find').classList.toggle('on', S.view === 'findall');
     var was = S.shown; S.shown = S.view;
-    if (S.view === 'day') renderDay(); else if (S.view === 'findall') renderFindAll(); else renderDays();
+    if (S.view === 'day') renderDay(); else if (S.view === 'findall') renderFindAll(); else if (S.view === 'evidence') renderEvidence(); else if (S.view === 'recap') renderRecap(); else renderDays();
     if (was && was !== S.view) slide(S.view === 'days' ? 'back' : 'fwd');
+    stretchable();
     sync();
   }
   // Motion (1.3): a screen slides in from the right going in, from the left coming back; quick, no bounce, and none at
@@ -477,7 +672,7 @@
   // (or search) to the days. On the days, Back once says "Press back again to leave"; a second Back leaves. Each open layer
   // is one history entry above a guard entry; sync() keeps the count in step with what's open after every draw.
   var H = { n: 0, guard: false, skip: 0, leaving: null };
-  function layers() { return (S.view !== 'days' ? 1 : 0) + (sheetOpen() ? 1 : 0) + (S.view === 'day' && S.edit ? 1 : 0) + (S.view === 'day' && S.findOpen ? 1 : 0); }
+  function layers() { return (S.view !== 'days' ? 1 : 0) + (sheetOpen() ? 1 : 0) + (S.view === 'day' && S.edit ? 1 : 0) + (S.view === 'day' && S.findOpen ? 1 : 0) + (S.view === 'evidence' && S.evItp ? 1 : 0) + (viewerOpen() ? 1 : 0); }
   function sync() {
     if (!H.ready) return;
     if (!H.guard) { history.pushState({ walk: 'guard' }, ''); H.guard = true; }
@@ -486,7 +681,9 @@
     if (H.n > want) { H.skip++; history.go(want - H.n); H.n = want; }
   }
   function closeTop() {
+    if (viewerOpen()) { closeViewer(); return; }
     if (sheetOpen()) { hideSheet(); return; }
+    if (S.view === 'evidence' && S.evItp) { S.evItp = null; S.evLine = null; renderEvidence(); slide('back'); return; }
     if (S.view === 'day' && S.edit) { S.edit = null; S.as = null; renderDay(); return; }
     if (S.view === 'day' && S.findOpen) { S.findOpen = false; S.find = ''; renderDay(); return; }
     if (S.view !== 'days') { S.view = 'days'; S.edit = null; S.findOpen = false; S.find = ''; render(); }
@@ -502,6 +699,10 @@
 
   document.addEventListener('click', async function (ev) {
     var t = ev.target.closest('button, [data-day], [data-e], [data-jump], [data-put], [data-line], [data-me], [data-filter], [data-fix]');
+    if (t && t.dataset.ins != null) { var bi = $('box'); if (!bi) return; var cur = bi.value; bi.value = /^\w+\.$/.test(t.dataset.ins.trim()) ? t.dataset.ins + cur.replace(/^\s+/, '') : cur.replace(/\s*$/, '') + (cur.trim() ? ' ' : '') + t.dataset.ins.replace(/^\s+/, ''); S.draft = bi.value; bi.focus(); bi.setSelectionRange(bi.value.length, bi.value.length); grow(); reads(); buzz(4); return; }
+    if (t && t.dataset.ev) { S.evItp = t.dataset.ev; S.evLine = null; renderEvidence(); slide('fwd'); sync(); return; }
+    if (t && t.dataset.evl) { S.evLine = S.evLine === t.dataset.evl ? null : t.dataset.evl; renderEvidence(); return; }
+    if (t && t.dataset.ph != null) { viewer(+t.dataset.ph); return; }
     if (!t) { if (ev.target.id === 'sheet') closeSheet(); return; }
     if (t.id === 'more' || t.id === 'proj') { settings(); return; }
     if (t.id === 'find') { S.view = S.view === 'findall' ? 'days' : 'findall'; render(); return; }
@@ -520,7 +721,16 @@
     var act = t.dataset.act;
     if (!act) return;
     if (act === 'today') openDay(today());
-    else if (act === 'back') { S.view = 'days'; S.edit = null; render(); }
+    else if (act === 'back') { if (S.view === 'evidence' && S.evItp) { history.back(); return; } S.view = 'days'; S.edit = null; render(); }
+    else if (act === 'evidence') { S.view = 'evidence'; S.evItp = null; S.evLine = null; render(); }
+    else if (act === 'recap') { S.view = 'recap'; render(); }
+    else if (act === 'print') window.print();
+    else if (act === 'shareev') shareEvidence();
+    else if (act === 'vclose') history.back();
+    else if (act === 'vprev' || act === 'vnext') { var nn = (S.evPhotos || []).length; if (nn) viewer((S.viewAt + (act === 'vnext' ? 1 : nn - 1)) % nn); }
+    else if (act === 'undo') { var u = toastUndo; toastUndo = null; $('toast').hidden = true; if (u) { await u.fn(); toast('Undone'); } }
+    else if (act === 'closesheet') closeSheet();
+    else if (act === 'clearold') clearOld();
     else if (act === 'earlier') { S.showEarlier = true; renderDays(); }
     else if (act === 'ship') shipSheet();
     else if (act === 'doship') doShip();
@@ -533,9 +743,14 @@
     else if (act === 'lastline') { var bx2 = $('box'); bx2.value = bx2.value.replace(/\s*$/, '') + ' @' + S.lastLine.itp + ' ' + S.lastLine.line; S.draft = bx2.value; bx2.focus(); reads(); }
     else if (act === 'unloc') { S.loc = null; await kvSet('loc', null); renderDay(); }
     else if (act === 'cancel') { S.edit = null; S.as = null; S.photos = []; renderDay(); }
-    else if (act === 'delete') { var dl = S.edit; if (!confirm('Delete this line?')) return; var gel = document.querySelector('[data-e="' + dl + '"]'); if (gel && MOTION) { gel.style.height = gel.offsetHeight + 'px'; void gel.offsetWidth; gel.classList.add('gone'); await new Promise(function (r) { setTimeout(r, 200); }); } var dx = S.entries.filter(function (x) { return x.id === dl; })[0]; S.entries = S.entries.filter(function (x) { return x.id !== dl; }); await delEntry(dl);
+    else if (act === 'delete') { var dl = S.edit; var gel = document.querySelector('[data-e="' + dl + '"]'); if (gel && MOTION) { gel.style.height = gel.offsetHeight + 'px'; void gel.offsetWidth; gel.classList.add('gone'); await new Promise(function (r) { setTimeout(r, 200); }); } var dx = S.entries.filter(function (x) { return x.id === dl; })[0]; S.entries = S.entries.filter(function (x) { return x.id !== dl; }); await delEntry(dl);
       if (dx && dx.shippedAt) { S.gone = (S.gone || []).concat([{ id: dl, day: dx.day }]); await kvSet('gone:' + S.proj.project.id, S.gone); }   // shipped already: BTC takes it out next ship
-      S.edit = null; renderDay(); toast(dx && dx.shippedAt ? 'Deleted. Ship again to take it out of BTC.' : 'Deleted'); }
+      S.edit = null; S.photos = []; renderDay(); buzz(6);
+      toast(dx && dx.shippedAt ? 'Deleted. Ship again to take it out of BTC.' : 'Deleted', false, dx ? { label: 'Undo', fn: async function () {
+        S.entries.push(dx); await putEntry(dx);
+        if (dx.shippedAt) { S.gone = (S.gone || []).filter(function (g) { return g.id !== dx.id; }); await kvSet('gone:' + S.proj.project.id, S.gone); }
+        if (S.view === 'day') renderDay();
+      } } : null); }
     else if (act === 'load') $('proj-in').click();
     else if (act === 'me') pickMe();
     else if (act === 'demo') useDemo();
@@ -547,6 +762,7 @@
     if (fs.length > room) toast('Up to ' + MAXPICS + ' photos on a line; the first ' + Math.max(room, 0) + ' are in.', true);
     for (var i = 0; i < Math.min(fs.length, room); i++) { try { S.photos.push(await shrink(fs[i])); } catch (e) { bad++; } }
     if (keep != null) S.draft = keep;
+    if (S.photos.length) buzz(6);
     renderDay(); var b = $('box'); if (b) b.focus();
     if (bad) toast(bad === 1 ? 'Could not use one of those photos.' : 'Could not use ' + bad + ' of those photos.', true);
   }

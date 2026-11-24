@@ -31,6 +31,20 @@ Tap **LOG AS** to change the type before sending (note, clash, action, ITP). Wit
 
 Due dates: `today`, `tomorrow`/`tmrw`, `fri`/`by Friday`/`on Fri`, `next Friday`, `eow`, `next week`, `in 3 days`, `28-11` or `28/11`. Saturday and Sunday need the full name.
 
+## Night shift (2.0)
+
+The look and feel are in [DESIGN.md](DESIGN.md). What 2.0 adds:
+
+- **Your week:** a greeting, the week's lines, photos and ITP lines, an orange banner when a day isn't shipped, a green "All clear" when everything is.
+- **A day** opens with its name and totals; lines run down a timeline with a coloured dot per kind; a place heading starts each stretch after `at SBR 1`.
+- **It remembers for you:** with the box empty, the next line on the ITP you used last, the people you tag most and `clash.` `action.` `ITP.` are one tap away.
+- **Mistakes cost nothing:** Undo after a send (the words and photos come back) and after a delete (no "are you sure").
+- **Evidence:** every ITP photo you've logged, by ITP and line, with a ring for how many lines have some; full screen to show the engineer (tap the sides for next and previous), Share to send a line's photos.
+- **This week:** your week on the record (lines per day, photos, ITP lines evidenced, clashes caught early); Share as PDF prints it.
+- **The ship moment:** a tick that draws itself and where everything goes.
+- **Pull-down stretch** on every list; a light buzz on Android for send, photos and ship.
+- **Free up space** (⋮): clear shipped lines older than a month; they're safe in BTC.
+
 ## The two files
 BTC Walk only talks to BTC through two files.
 
