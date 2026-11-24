@@ -6,7 +6,7 @@
    (⋮ › Load project). No server, nothing sent anywhere else. */
 'use strict';
 (function () {
-  var VERSION = '2.2';
+  var VERSION = '2.3';
   var FORMAT = 'btcwalk', PFORMAT = 'btcproject';
 
   // ---------- the demo job (generic) ----------
@@ -113,14 +113,36 @@
   // visitor. and weather. (or a weather word on its own line: rainy, fine, windy…).
   var LEAD = /^(note|action|clash|flow(?:-?on)?|itp|delay|instruction|instr|ei|si|crew|labour|visitor|visit|weather|wx)\.(?=\s|$)\s*/i;
   var LEADMAP = { delay: 'delay', instruction: 'instruction', instr: 'instruction', ei: 'instruction', si: 'instruction', crew: 'crew', labour: 'crew', visitor: 'visitor', visit: 'visitor', weather: 'weather', wx: 'weather' };
-  var WXONLY = /^(fine|sunny|clear|cloudy|overcast|showers|showery|drizzle|drizzly|rain|rainy|raining|wet|heavy rain|pouring|storm|stormy|windy|gusty|calm|cold|hot|frost|frosty|fog|foggy)(\s*(,|and|&)?\s*(fine|sunny|clear|cloudy|overcast|showers|showery|drizzle|rain|rainy|raining|wet|heavy rain|pouring|storm|stormy|windy|gusty|calm|cold|hot|frost|frosty|fog|foggy))*[.!]?$/i;
-  // What a weather line says, part by part; anything not said stays the forecast's guess.
+  // 2.3: a line only about the weather is weather, however it's said ("pissing down since lunch", "8 deg and blowing a gale").
+  // Every word has to be a weather word, a small word, a time or a number with a unit; at least one has to say something.
+  var WXCORE = /^(cleared|clearing|fine|sunny|sun|clear|dry|cloudy|cloud|clouds|overcast|grey|gray|showers?|showery|drizzle|drizzly|drizzling|spitting|mizzle|rain|rainy|raining|rained|wet|pouring|poured|pissing|bucketing|hosing|teeming|storm|stormy|thunder|thunderstorm|lightning|hail|hailing|sleet|snow|snowing|windy|gusty|gusts?|gale|breezy|breeze|wind|calm|still|cold|freezing|chilly|cool|warm|hot|scorcher|boiling|muggy|humid|frost|frosty|fog|foggy|mist|misty|southerly|northerly|easterly|westerly|nor'?west(er|erly)?|sou'?west(er|erly)?|nor'?east(er|erly)?|sou'?east(er|erly)?)$/;
+  var WXFILL = /^(it|it's|its|is|was|been|has|very|really|bit|abit|a|quite|pretty|real|super|and|&|but|with|since|from|till|until|this|morning|arvo|afternoon|evening|night|lunch|lunchtime|smoko|now|still|all|day|today|getting|got|started|starting|stopped|stopping|eased|easing|light|heavy|down|up|the|of|out|then|later|at|on|off|again|bloody|mm|skies|sky|nice|good|bad|rubbish|horrible|shocking|blowing|blowy|patchy|odd|few|some|on-off|on\/off|hours?|hrs?|h|deg|degs|degrees|c|°|°c|km\/h|kmh|kph|knots?|kts?|to|ish|-|–|odd)$/;
+  function isWxLine(t) {
+    var w = String(t || '').toLowerCase().replace(/[.,!;:()]+/g, ' ').replace(/(\d)(deg|degs|degrees|°c?|c|km\/h|kmh|kph|kts?|knots?|h|hrs?|mm)\b/g, '$1 $2').split(/\s+/).filter(Boolean), core = 0;
+    if (!w.length || w.length > 14) return false;
+    for (var k = 0; k < w.length; k++) {
+      var x = w[k].replace(/^[-–]+|[-–]+$/g, '') || w[k];
+      if (WXCORE.test(x)) { core++; continue; }
+      if (/^-?\d{1,3}(\.\d)?$/.test(x) && /^(deg|degs|degrees|°|°c|c)$/.test(w[k + 1] || '')) { core++; continue; }
+      if (/^-?\d{1,3}(\.\d)?$/.test(x) || /^\d{1,2}[:.]\d{2}$/.test(x) || /^\d{1,2}(am|pm)$/.test(x)) continue;
+      if (WXFILL.test(x)) continue;
+      return false;
+    }
+    return core > 0;
+  }
+  // What a weather line says, part by part; anything not said stays the forecast. Temperatures are always °C (8 deg, 8°, 8 degrees).
   function wxParse(t) {
     t = String(t || '').toLowerCase(); var o = {};
-    if (/heavy rain|pouring|storm/.test(t)) o.sky = 'heavy'; else if (/\b(rain|rainy|raining|wet)\b/.test(t)) o.sky = 'rain'; else if (/shower|drizzl/.test(t)) o.sky = 'showers';
-    else if (/overcast|cloudy|fog/.test(t)) o.sky = 'cloudy'; else if (/\b(fine|sunny|clear|dry)\b/.test(t)) o.sky = 'fine';
-    var m = /(-?\d{1,2})\s*(°|deg|degrees|c\b)/.exec(t); if (m) o.temp = +m[1]; else if (/\bcold\b|frost/.test(t)) o.feel = 'cold'; else if (/\bhot\b/.test(t)) o.feel = 'hot';
-    var w = /(\d{1,3})\s*(km\/?h|kph)/.exec(t); if (w) o.wind = +w[1]; if (/windy|gust/.test(t)) o.windy = true; if (/\bcalm\b/.test(t)) o.windy = false;
+    if (/heavy rain|pouring|poured|pissing|bucketing|hosing|teeming|storm|thunder|hail/.test(t)) o.sky = 'heavy';
+    else if (/\b(rain|rainy|raining|rained|wet|sleet|snow|snowing)\b/.test(t) && !/\b(stopped|eased|cleared|dried)\b/.test(t)) o.sky = 'rain';
+    else if (/shower|drizzl|spitting|mizzle/.test(t)) o.sky = 'showers';
+    else if (/\b(cleared|clearing)\b/.test(t)) o.sky = 'fine';
+    else if (/overcast|cloud|fog|mist|grey|gray|\b(stopped|eased)\b/.test(t)) o.sky = 'cloudy';
+    else if (/\b(fine|sunny|sun|clear|dry|scorcher)\b/.test(t)) o.sky = 'fine';
+    var m = /(-?\d{1,2}(?:\.\d)?)\s*(°|deg|degs|degrees|c\b)/.exec(t); if (m) o.temp = Math.round(+m[1]);
+    else if (/\b(cold|freezing|chilly)\b|frost/.test(t)) o.feel = 'cold'; else if (/\b(hot|scorcher|boiling|muggy|humid)\b/.test(t)) o.feel = 'hot';
+    var w = /(\d{1,3})\s*(km\/?h|kph)/.exec(t), kn = /(\d{1,3})\s*(knots?|kts?)\b/.exec(t); if (w) o.wind = +w[1]; else if (kn) o.wind = Math.round(+kn[1] * 1.852);
+    if (/windy|gust|gale|blowing|blowy|breez|southerly|northerly|easterly|westerly|nor'?west|sou'?west|nor'?east|sou'?east/.test(t)) o.windy = true; if (/\bcalm\b/.test(t)) o.windy = false;
     return o;
   }
   function lostHours(t) { var h = /(\d+(?:\.\d+)?)\s*(h|hr|hrs|hour|hours)\b/i.exec(t), mm = /(\d+)\s*(m|min|mins|minutes)\b/i.exec(t); return (h ? +h[1] : 0) + (mm ? +mm[1] / 60 : 0); }
@@ -132,7 +154,7 @@
     if (!text) return out;
     var ld = LEAD.exec(text);
     if (ld) { var w = ld[1].toLowerCase(); out.forced = LEADMAP[w] || (w === 'itp' ? 'itp' : /^(flow|clash)/.test(w) ? 'flowon' : w); text = text.slice(ld[0].length); }
-    else if (WXONLY.test(text)) out.forced = 'weather';
+    else if (isWxLine(text)) out.forced = 'weather';
     if (out.forced === 'weather' || out.forced === 'crew') { out.type = out.forced; out.text = text; if (out.forced === 'weather') out.wx = wxParse(text); else out.crew = crewOf(text); return out; }
     text = text.replace(/(^|\s)@(clash|flow-?on)\b/i, function () { if (!out.forced) out.forced = 'flowon'; return ' '; }).trim();
     text = text.replace(/(^|\s)@itp(?=\s|$)/i, function () { if (!out.forced) out.forced = 'itp'; return ' '; }).trim();
@@ -323,7 +345,7 @@
     if (!v.trim() && !S.photos.length) { r.innerHTML = ''; return; }
     if (p.move) { r.innerHTML = 'Moves you to <span class="chip">' + esc(p.move.name) + '</span>'; return; }
     var type = S.as || p.type;
-    if (type === 'weather') { r.innerHTML = 'Logs the weather <span class="chip here">' + esc(wxWords(p.wx) || 'as you say it') + '</span><span class="chip">the rest stays the forecast’s guess</span>'; return; }
+    if (type === 'weather') { r.innerHTML = 'Logs the weather <span class="chip here">' + esc(wxWords(p.wx) || 'as you say it') + '</span><span class="chip">the rest stays the forecast</span>'; return; }
     if (type === 'crew') { r.innerHTML = 'Crew on site <span class="chip">' + esc((p.crew || []).map(function (c) { return c.who + ' ' + c.n; }).join(' · ') || 'type who and how many: HEB 6, sparkies 4') + '</span>'; return; }
     var where = p.itp ? (p.area ? p.area + ' · ' : '') + p.itp : p.area || p.tag || '';
     r.innerHTML = 'Log as <button type="button" class="as ' + type + '" data-act="as">' + TYPE[type].toUpperCase() + ' ▾</button>' +
@@ -379,7 +401,7 @@
     S.entries.push(en); await putEntry(en);
     S.draft = ''; S.photos = []; S.as = null; S.fresh = en.id; buzz(8); renderDay(); S.fresh = null;
     var np = pics(en).length;
-    if (type === 'weather') { wxRefresh(); toast('Weather logged: ' + wxWords(en.wx) + '. The rest of the day stays the forecast’s guess.', false, { label: 'Undo', fn: async function () { S.entries = S.entries.filter(function (x) { return x.id !== en.id; }); await delEntry(en.id); if (S.view === 'day') renderDay(); } }); return; }
+    if (type === 'weather') { wxRefresh(); toast('Weather logged: ' + wxWords(en.wx) + '. The rest of the day stays on the forecast.', false, { label: 'Undo', fn: async function () { S.entries = S.entries.filter(function (x) { return x.id !== en.id; }); await delEntry(en.id); if (S.view === 'day') renderDay(); } }); return; }
     toast(type === 'itp' ? (en.itp && en.line ? 'Logged on ' + en.itp + ' ' + en.line : 'Logged, to sort on the PC') + (np ? ' · ' + np + ' photo' + (np === 1 ? '' : 's') : '') : 'Logged' + (np ? ' · ' + np + ' photo' + (np === 1 ? '' : 's') : ''), false,
       { label: 'Undo', fn: async function () { S.entries = S.entries.filter(function (x) { return x.id !== en.id; }); await delEntry(en.id); S.draft = raw; S.photos = pics(en).slice(); if (S.view === 'day') renderDay(); } });
   }
@@ -648,9 +670,9 @@
   // ---------- weather (2.1) ----------
   // The forecast for the site comes from MET Norway (api.met.no, free with credit, commercial use allowed), only once
   // someone has read and accepted their terms in ⋮ › Weather, for the site's location (the project file's, or this phone's
-  // once, with permission). It's modelled weather, so it's a guess. A weather word on its own line ("rainy", "fine, windy")
+  // once, with permission). It's modelled weather, a forecast. A weather word on its own line ("rainy", "fine, windy")
   // or weather. logs what it's actually like; that wins for the part it says (sky, temperature, wind), and the rest stays
-  // the forecast's guess. A logged sky holds until the forecast clearly moves on (wet: two dry, clearing hours in a row;
+  // the forecast. A logged sky holds until the forecast clearly moves on (wet: two dry, clearing hours in a row;
   // dry: two hours of the forecast changing its mind), or someone logs again. Logged rain the forecast missed makes the rest
   // of that day lean wetter. Each hour from 07:00 to 17:00 (wider if lines are logged outside) gets one call.
   var WXSKY = { fine: 'Fine', cloudy: 'Cloudy', showers: 'Showers', rain: 'Rain', heavy: 'Heavy rain' };
@@ -776,25 +798,25 @@
     var t = today(), es = S.entries.filter(function (e) { return e.day === t; }), w = await wxCalc(t, es); if (!w) return '';
     S.wxShown = w;
     var h = new Date().getHours(), cur = w.hrs.filter(function (x) { return x.h === h; })[0] || w.hrs.filter(function (x) { return x.sky; }).slice(-1)[0]; if (!cur || !cur.sky) return '';
-    var from = cur.h; for (var i = w.hrs.indexOf(cur) - 1; i >= 0 && w.hrs[i].sky === cur.sky; i--) from = w.hrs[i].h;
-    var ws = cur.ws != null ? ' · ' + (compass(cur.wd) ? compass(cur.wd) + ' ' : '') + cur.ws + ' km/h' : '';
-    return '<button type="button" class="wxn" data-act="wxdetail">' + WXICON[cur.sky] + '<span>' + (cur.t != null ? '<b>' + cur.t + '°</b> · ' : '') + WXSKY[cur.sky] + (from < cur.h ? ' since ' + pad(from) + ':00' : '') + (cur.logged ? ' (' + (cur.by ? cur.by + ' ' : '') + 'logged)' : '') + ws + '</span></button>';
+    var ws = cur.ws != null ? (compass(cur.wd) ? compass(cur.wd) + ' ' : '') + cur.ws : cur.windy ? 'windy' : '';
+    return '<button type="button" class="wxc' + (cur.logged ? ' lg' : '') + '" data-act="wxdetail" aria-label="Weather now"><span class="wxc-t">' + WXICON[cur.sky] + '<b>' + (cur.t != null ? cur.t + '°' : WXSKY[cur.sky]) + '</b>' + (cur.logged ? '<i></i>' : '') + '</span>' +
+      '<span class="wxc-s">' + [cur.t != null ? WXSKY[cur.sky] : '', ws].filter(Boolean).join(' · ') + '</span></button>';
   }
   function wxDetail() {
     var w = S.wxShown; if (!w) return;
     var rows = w.hrs.map(function (x) {
-      return '<div><span class="mono" style="width:44px">' + pad(x.h) + ':00</span><span style="width:22px">' + (x.sky ? WXICON[x.sky] : '') + '</span><span class="lt"><b>' + (x.sky ? WXSKY[x.sky] : '–') + (x.logged ? ' · logged' : ' · guess') + '</b><span>' +
+      return '<div><span class="mono" style="width:44px">' + pad(x.h) + ':00</span><span style="width:22px">' + (x.sky ? WXICON[x.sky] : '') + '</span><span class="lt"><b>' + (x.sky ? WXSKY[x.sky] : '–') + (x.logged ? ' · logged' : ' · forecast') + '</b><span>' +
         [x.t != null ? x.t + '°' + (x.tLogged ? ' (logged)' : '') : '', x.ws != null ? compass(x.wd) + ' ' + x.ws + ' km/h' + (x.wLogged ? ' (logged)' : '') : x.windy ? 'windy (logged)' : '', x.logged && x.at ? (x.by ? x.by + ' ' : '') + 'logged ' + hm(x.at) : ''].filter(Boolean).join(' · ') + '</span></span></div>';
     }).join('');
     var logs = w.logs.map(function (e) { return '<button type="button" data-e="' + esc(e.id) + '"><span class="mono" style="width:44px">' + hm(e.time) + '</span><span class="lt"><b>' + esc(e.raw || e.text) + '</b><span>Tap to change or delete</span></span></button>'; }).join('');
     sheet('<div class="grip"></div><h2>Weather</h2><p>' + esc(wxSummary(w.hrs)) + '</p>' +
       (logs ? '<div class="sec">Logged on site</div><div class="list">' + logs + '</div>' : '') +
       '<div class="sec">Hour by hour</div><div class="list wxl">' + rows + '</div>' +
-      '<p class="small">' + (w.fc ? 'Guesses are modelled weather from MET Norway (yr.no), not a reading on site. ' : 'No forecast for this day: only what was logged. ') + 'Type a weather word on its own (rainy, fine, windy) or <b>weather.</b> to log what it’s actually like; it wins for what it says.</p>');
+      '<p class="small">' + (w.fc ? 'The forecast is modelled weather from MET Norway (yr.no), not a reading on site. ' : 'No forecast for this day: only what was logged. ') + 'Type what it’s actually like (rainy, pissing down since lunch, 8 deg and gusty); it wins for what it says.</p>');
   }
   function wxSettings() {
     var on = wxOn(), loc = siteLoc();
-    sheet('<div class="grip"></div><h2>Weather</h2><p>BTC Walk can fill in each day’s weather from <b>MET Norway</b> (yr.no): free, credited, and allowed for work use. It’s modelled weather for the site, a guess; what you log on site wins.</p>' +
+    sheet('<div class="grip"></div><h2>Weather</h2><p>BTC Walk can fill in each day’s weather from <b>MET Norway</b> (yr.no): free, credited, and allowed for work use. It’s a modelled forecast for the site; what you log on site wins.</p>' +
       '<p>MET Norway keeps the phone’s internet address and the site’s location in its logs. Nothing else about the job is sent. Its terms are a legal agreement for you to read and accept yourself: <a href="https://api.met.no/doc/TermsOfService" target="_blank" rel="noopener">api.met.no/doc/TermsOfService</a></p>' +
       '<div class="list">' + (on ? '<button type="button" data-act="wxoff"><span class="lt"><b>Weather is on</b><span>Accepted ' + esc(S.wx.acceptedAt ? dayLabel(S.wx.acceptedAt.slice(0, 10)) : '') + '. Tap to turn it off.</span></span></button>'
         : '<button type="button" data-act="wxon"><span class="lt"><b>I’ve read MET Norway’s terms and accept them</b><span>Turns weather on for this phone</span></span></button>') +

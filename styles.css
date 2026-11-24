@@ -331,3 +331,14 @@ main.in-back { animation: in-back .24s var(--ease); }
 .wxf-l { display: block; color: var(--lime); font-size: 12px; margin-top: 2px; }
 .wxn { display: inline-flex; align-items: center; gap: 8px; margin-top: 10px; padding: 6px 12px 6px 10px; border-radius: 16px; border: 0; background: var(--panel2); color: var(--ink2); font-size: 13px; text-align: left; }
 .wxn b { color: var(--ink); font-weight: 600; }
+
+/* 2.3: the weather now, small, top right beside the greeting */
+.hello { position: relative; }
+#wxnow { position: absolute; right: 0; top: 30px; }
+.wxc { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; padding: 8px 10px; border: 0; border-radius: 16px; background: transparent; color: var(--ink2); text-align: right; max-width: 120px; }
+.wxc:active { background: var(--panel2); }
+.wxc-t { display: flex; align-items: center; gap: 6px; position: relative; }
+.wxc-t svg { width: 26px; height: 26px; }
+.wxc-t b { font-size: 26px; font-weight: 700; letter-spacing: -.03em; color: var(--ink); line-height: 1; }
+.wxc-t i { position: absolute; top: -2px; right: -8px; width: 7px; height: 7px; border-radius: 50%; background: var(--lime, #D4FF3A); }
+.wxc-s { font-size: 12px; color: var(--muted); white-space: nowrap; }
