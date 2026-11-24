@@ -6,7 +6,7 @@
    (⋮ › Load project). No server, nothing sent anywhere else. */
 'use strict';
 (function () {
-  var VERSION = '2.1';
+  var VERSION = '2.2';
   var FORMAT = 'btcwalk', PFORMAT = 'btcproject';
 
   // ---------- the demo job (generic) ----------
@@ -201,7 +201,7 @@
     var ds = daysOf(), t = today(), waiting = ds.filter(function (d) { return d.unshipped; }), old = ds.filter(function (d) { return d.unshipped && d.day < t; });
     var age = S.proj.made && !S.proj.demo ? Math.floor((Date.now() - new Date(S.proj.made)) / 864e5) : 0;
     var wk = weekOf(t), wc = counts(wk.es), fn = firstName();
-    var html = '<div class="hello"><div class="k">Week ' + weekNo(t) + ' · ' + dayDate(wk.from).getDate() + '–' + dayDate(wk.to).getDate() + ' ' + MO[dayDate(wk.to).getMonth()] + '</div><h1>' + greet() + (fn ? ',<br><span>' + esc(fn) + '.</span>' : '.') + '</h1></div>' +
+    var html = '<div class="hello"><div class="k">Week ' + weekNo(t) + ' · ' + dayDate(wk.from).getDate() + '–' + dayDate(wk.to).getDate() + ' ' + MO[dayDate(wk.to).getMonth()] + '</div><h1>' + greet() + (fn ? ',<br><span>' + esc(fn) + '.</span>' : '.') + '</h1><div id="wxnow"></div></div>' +
       '<div class="stats"><button type="button" class="stat" data-act="recap"><b>' + wk.es.length + '</b><span>lines this week</span></button><button type="button" class="stat" data-act="recap"><b>' + wc.photo + '</b><span>photos</span></button><button type="button" class="stat i" data-act="evidence"><b>' + itpLinesDone(wk.es) + '</b><span>ITP lines</span></button></div>';
     if (S.proj.demo) html += '<div class="bar-info">Demo job (made-up names). Load your job’s project file in ⋮ › Load project. Nothing leaves this phone until you ship.</div>';
     else if (age >= 7) html += '<div class="bar-warn">Project file is ' + age + ' days old<button type="button" data-act="load">Reload</button></div>';
@@ -224,6 +224,7 @@
     var hasT = ds.some(function (d) { return d.day === t; });
     main.innerHTML = '<div class="scroll"><div class="pad">' + html + '</div></div><div class="foot"><button type="button" class="btn primary" data-act="today">' + (hasT ? 'Open today' : '＋ Start day') + '</button>' +
       '<button type="button" class="btn ship' + (waiting.length ? '' : ' done') + '" data-act="ship">Ship' + (waiting.length ? '<span class="count">' + waiting.length + '</span>' : '') + '</button></div>';
+    wxNow().then(function (h) { var sl = $('wxnow'); if (sl && S.view === 'days') sl.innerHTML = h; });
   }
 
   // ---------- a day's chat ----------
@@ -467,7 +468,7 @@
       walks: [], entries: es.map(function (e) { return { id: e.id, day: e.day, time: e.time, type: e.type, raw: e.raw, text: e.text, action: e.action, who: e.who, area: e.area, itp: e.itp, line: e.line || '', tag: e.tag, location: e.location, priority: e.priority, due: e.due, photos: pics(e), photo: pics(e)[0] || '', edited: e.edited, wx: e.wx, crew: e.crew, lost: e.lost, was: e.was, wasType: e.wasType, amendedAt: e.amendedAt }; }), removed: gone.map(function (g) { return { id: g.id, day: g.day }; }), closures: [] };
     // .btcwalk.txt as plain text (1.4.1): Android's share sheet refuses file types it doesn't know ("Permission denied"),
     // and plain text is one it always takes. BTC reads .btcwalk and .btcwalk.txt alike.
-    var wx = {}; for (var wi = 0; wi < pick.length; wi++) { var fc = await wxForecast(pick[wi].day); if (fc) wx[pick[wi].day] = fc; }
+    var wx = {}; for (var wi = 0; wi < pick.length; wi++) { var fc = await wxForecast(pick[wi].day), st0 = await wxStart(pick[wi].day); if (fc || st0) wx[pick[wi].day] = Object.assign({}, fc || { day: pick[wi].day, source: 'MET Norway', hours: {} }, st0 ? { start: st0 } : {}); }
     if (Object.keys(wx).length) body.weather = wx;   // the forecast BTC needs to draw the job's weather (2.1); logged weather goes as lines
     var name = fileName(pick), file = new File([JSON.stringify(body)], name, { type: 'text/plain' });
     var save = function () { var a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = name; document.body.appendChild(a); a.click(); a.remove(); };
@@ -688,10 +689,15 @@
         Object.keys(byDay[day]).forEach(function (h) { if (day > t0 || +h >= nowH || !hrs[h]) hrs[h] = byDay[day][h]; });
         await kvSet('wxf:' + S.proj.project.id + ':' + day, { day: day, source: 'MET Norway', at: new Date().toISOString(), loc: { lat: +(+loc.lat).toFixed(4), lon: +(+loc.lon).toFixed(4) }, hours: hrs });
       }
+      // the day starts with a forecast (2.2): the first time today's forecast arrives it's kept as it stood, never changed
+      var snapKey = 'wxs:' + S.proj.project.id + ':' + t0, snap = await kvGet(snapKey);
+      if (!snap) { var fct = await kvGet('wxf:' + S.proj.project.id + ':' + t0); if (fct) { var hs0 = wxDay(fct, [], []); await kvSet(snapKey, { at: new Date().toISOString(), sum: wxSummary(hs0), sky: mainSky(hs0) }); } }
       S.wx.at = Date.now(); await kvSet('wx', S.wx);
       if (S.view === 'day') renderDay(); else if (S.view === 'days') renderDays();
     } catch (e) { /* no signal or the service is down: carry on without */ }
   }
+  function mainSky(hrs) { var wet = hrs.filter(function (x) { return WET[x.sky]; }); if (wet.length) return wet.sort(function (a, b) { return ['showers', 'rain', 'heavy'].indexOf(b.sky) - ['showers', 'rain', 'heavy'].indexOf(a.sky); })[0].sky; var c = hrs.filter(function (x) { return x.sky === 'cloudy'; }).length; return c > hrs.filter(function (x) { return x.sky === 'fine'; }).length ? 'cloudy' : hrs.some(function (x) { return x.sky; }) ? 'fine' : 'cloudy'; }
+  async function wxStart(day) { return S.proj ? ((await kvGet('wxs:' + S.proj.project.id + ':' + day)) || null) : null; }
   function wxRefresh() { if (S.view === 'day') renderDay(); }
   async function wxForecast(day) { return S.proj ? ((await kvGet('wxf:' + S.proj.project.id + ':' + day)) || null) : null; }
   // The day's weather, hour by hour: forecast hours (may be none) and the logged lines (from anyone) → one call per hour.
@@ -749,12 +755,30 @@
       '<span class="wx-ax">' + hrs.map(function (x, i) { return '<span>' + (i % 2 === 0 ? pad(x.h) : '') + '</span>'; }).join('') + '</span>' +
       '<span class="wx-s">' + (lastMark ? '<span class="wx-by">' + esc((lastMark.by ? lastMark.by + ' ' : '') + 'logged ' + WXSKY[lastMark.sky].toLowerCase() + ' ' + hm(lastMark.at)) + '</span>' : '') + esc(sum) + '</span></button>';
   }
-  async function wxBlock(d, es) {
+  async function wxCalc(d, es) {
     var fc = await wxForecast(d), logs = es.filter(function (e) { return e.type === 'weather'; }).map(function (e) { return Object.assign({}, e, { by: S.me ? S.me.handle : '' }); });
-    if (!fc && !logs.length) return '';
+    if (!fc && !logs.length) return null;
     var hs = es.map(function (e) { return new Date(e.time).getHours(); }), hrs = wxDay(fc, logs, hs);
-    S.wxShown = { day: d, hrs: hrs, fc: fc, logs: logs };
-    return wxStrip(hrs, wxSummary(hrs));
+    return { day: d, hrs: hrs, fc: fc, logs: logs };
+  }
+  // A day starts with the forecast as it stood when the day began (2.2), small, then what was logged; tap for the hour by hour.
+  async function wxBlock(d, es) {
+    var w = await wxCalc(d, es), st = await wxStart(d);
+    if (!w && !st) return '';
+    if (w) S.wxShown = w;
+    var lg = w ? w.logs : [];
+    return '<button type="button" class="wxf" data-act="wxdetail"><span class="wxf-i">' + WXICON[st ? st.sky : mainSky(w.hrs)] + '</span><span class="wxf-t">' +
+      (st ? '<b>Forecast at ' + hm(st.at) + '</b> · ' + esc(st.sum) : '<b>Weather</b> · ' + esc(wxSummary(w.hrs))) +
+      (lg.length ? '<span class="wxf-l">Logged: ' + lg.map(function (e) { return esc(wxWords(e.wx) + ' ' + hm(e.time)); }).join(' · ') + '</span>' : '') + '</span></button>';
+  }
+  // Home: what it's doing now, small, after the greeting (2.2).
+  async function wxNow() {
+    var t = today(), es = S.entries.filter(function (e) { return e.day === t; }), w = await wxCalc(t, es); if (!w) return '';
+    S.wxShown = w;
+    var h = new Date().getHours(), cur = w.hrs.filter(function (x) { return x.h === h; })[0] || w.hrs.filter(function (x) { return x.sky; }).slice(-1)[0]; if (!cur || !cur.sky) return '';
+    var from = cur.h; for (var i = w.hrs.indexOf(cur) - 1; i >= 0 && w.hrs[i].sky === cur.sky; i--) from = w.hrs[i].h;
+    var ws = cur.ws != null ? ' · ' + (compass(cur.wd) ? compass(cur.wd) + ' ' : '') + cur.ws + ' km/h' : '';
+    return '<button type="button" class="wxn" data-act="wxdetail">' + WXICON[cur.sky] + '<span>' + (cur.t != null ? '<b>' + cur.t + '°</b> · ' : '') + WXSKY[cur.sky] + (from < cur.h ? ' since ' + pad(from) + ':00' : '') + (cur.logged ? ' (' + (cur.by ? cur.by + ' ' : '') + 'logged)' : '') + ws + '</span></button>';
   }
   function wxDetail() {
     var w = S.wxShown; if (!w) return;
