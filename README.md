@@ -1,6 +1,6 @@
 # BTC Walk
 
-A site diary on your phone. Open it and type: notes, photos, flow-ons and actions all go into the day's one chat. When you're done, **Ship** sends the day to BTC as one file through your phone's share sheet (Outlook), and BTC files it into your site diary.
+A site diary on your phone. Open it and type: notes, photos, clashes and actions all go into the day's one chat. When you're done, **Ship** sends the day to BTC as one file through your phone's share sheet (Outlook), and BTC files it into your site diary.
 
 Everything stays on the phone until you ship. There's no server and no account: the app is static files, and your lines live in the phone's own storage.
 
@@ -17,7 +17,7 @@ It opens on a made-up demo job. Load your job with ⋮ › **Load project…** a
 | You type | It's logged as |
 |---|---|
 | `pump plinth grouted` | a **note** |
-| `plinth moved 25 mm ; shop drawing 25 mm shorter` (or `--`, `→`, `->`) | a **flow-on**: what changed, then what has to happen downstream |
+| `plinth moved 25 mm ; shop drawing 25 mm shorter` (or `--`, `→`, `->`) | a **clash**: what changed, then what has to happen downstream |
 | `chase the cable schedule @AK P1 fri` | an **action** for AK, priority 1, due Friday |
 | `replace the isolator label` | an **action** for you (it starts with a doing word) |
 | `flange gasket weeping @ITP-06` | tagged to that place, not where you are |
@@ -25,9 +25,9 @@ It opens on a made-up demo job. Load your job with ⋮ › **Load project…** a
 | `at SBR 1` | moves you there (no line logged) |
 | `bolts torqued @ITP-06 3.2` (with a photo) | **ITP** evidence for that line: BTC files the photo on ITP-06 line 3.2 by itself. After `@ITP-06` and a space the ITP's lines are offered |
 | `ITP. grout done` or `@ITP grout done` | **ITP** evidence you'll put on its line on the PC (Build's Sort page) |
-| `note.` `action.` `flow.` `ITP.` at the start | says what the line is (the word is dropped); `@flow-on` is the same as `flow.` |
+| `note.` `action.` `clash.` `ITP.` at the start | says what the line is (the word is dropped); `@clash` is the same as `clash.` (`flow.` and `@flow-on` still work) |
 
-Tap **LOG AS** to change the type before sending (note, flow-on, action, ITP). With ITP and no line, the last line you used is a one-tap chip. Tap a line to edit or delete it. The camera button adds a photo to the next line (shrunk on the phone to about 200 KB).
+Tap **LOG AS** to change the type before sending (note, clash, action, ITP). With ITP and no line, the last line you used is a one-tap chip. Tap a line to edit or delete it. The camera button adds a photo to the next line (shrunk on the phone to about 200 KB).
 
 Due dates: `today`, `tomorrow`/`tmrw`, `fri`/`by Friday`/`on Fri`, `next Friday`, `eow`, `next week`, `in 3 days`, `28-11` or `28/11`. Saturday and Sunday need the full name.
 

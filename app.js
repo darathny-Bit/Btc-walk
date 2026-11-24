@@ -1,12 +1,12 @@
 /* BTC Walk: the phone's site diary for BTC.
-   The day is the chat: open it and type. Notes, photos, flow-ons ("what changed ; what next") and actions (@person)
+   The day is the chat: open it and type. Notes, photos, clashes ("what changed ; what next") and actions (@person)
    all go in the day's one chat. Ship sends the day (and any day not shipped yet) to BTC as one .btcwalk file through
    the phone's share sheet (Outlook); BTC files it into your site diary.
    Everything stays on this phone until it's shipped. The job comes from the project file BTC's Build makes
    (⋮ › Load project). No server, nothing sent anywhere else. */
 'use strict';
 (function () {
-  var VERSION = '1.7';
+  var VERSION = '1.8';
   var FORMAT = 'btcwalk', PFORMAT = 'btcproject';
 
   // ---------- the demo job (generic) ----------
@@ -62,7 +62,7 @@
   function uid() { return (S.me ? S.me.handle : 'X') + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7); }
 
   // ---------- reading a line ----------
-  // Checked in order: "at <place>" moves you · a flow-on (what changed, then -- ; → or ->, or starts flow-on / bridge)
+  // Checked in order: "at <place>" moves you · a clash (what changed, then -- ; → or ->, or starts clash / bridge)
   // · an action (@person, P1–P3, a due date, or a doing word first) · else a note. @ is who or where.
   var VERBS = /^(fix|replace|check|move|install|remove|update|confirm|chase|order|book|label|test|need to)\b/i;
   var SEP = /\s*(--|;|→|->)\s*/;
@@ -99,18 +99,18 @@
       if (!mm[3] && ymd(d) < base) d.setFullYear(y + 1); return ymd(d); });
     return { due: due, text: t.replace(/\s{2,}/g, ' ').trim() };
   }
-  // A word and a full stop at the start says what it is (1.6): note. action. flow. ITP. (the word is dropped). ITP is
+  // A word and a full stop at the start says what it is (1.6): note. action. clash. ITP. (the word is dropped; flow. still works). ITP is
   // evidence for an ITP line: @ITP-06 3.2 files it on that line in Build; plain @ITP (or no ITP) leaves it to sort on the
-  // PC. @flow-on is the same as flow.
-  var LEAD = /^(note|action|flow(?:-?on)?|itp)\.(?=\s|$)\s*/i;
+  // PC. @clash is the same as clash. (and the old @flow-on).
+  var LEAD = /^(note|action|clash|flow(?:-?on)?|itp)\.(?=\s|$)\s*/i;
   function lineOf(code, no) { var it = itpByCode(code); return it && (it.lines || []).filter(function (l) { return l.no === no; })[0] || null; }
   function itpByCode(code) { var k = key(code), hit = null; (S.proj.areas || []).forEach(function (a) { (a.itps || []).forEach(function (i) { if (!hit && key(i.code) === k) hit = i; }); }); return hit; }
   function parse(raw, day) {
     var text = String(raw || '').trim(), out = { type: 'note', text: '', action: '', who: '', area: '', itp: '', tag: '', line: '', priority: '', due: '', move: null, notFound: [], forced: '' };
     if (!text) return out;
     var ld = LEAD.exec(text);
-    if (ld) { var w = ld[1].toLowerCase(); out.forced = w === 'itp' ? 'itp' : /^flow/.test(w) ? 'flowon' : w; text = text.slice(ld[0].length); }
-    text = text.replace(/(^|\s)@flow-?on\b/i, function () { if (!out.forced) out.forced = 'flowon'; return ' '; }).trim();
+    if (ld) { var w = ld[1].toLowerCase(); out.forced = w === 'itp' ? 'itp' : /^(flow|clash)/.test(w) ? 'flowon' : w; text = text.slice(ld[0].length); }
+    text = text.replace(/(^|\s)@(clash|flow-?on)\b/i, function () { if (!out.forced) out.forced = 'flowon'; return ' '; }).trim();
     text = text.replace(/(^|\s)@itp(?=\s|$)/i, function () { if (!out.forced) out.forced = 'itp'; return ' '; }).trim();
     var mv = /^at\s+(.+)$/i.exec(text);
     if (mv) { var p0 = placeAt('@' + mv[1].trim(), 0); if (p0 && p0.len >= mv[1].trim().length - 1) { out.move = p0.place; return out; } }
@@ -134,18 +134,18 @@
     if (pm) { out.priority = 'P' + pm[2]; text = (text.slice(0, pm.index) + text.slice(pm.index + pm[0].length)).replace(/\s{2,}/g, ' '); }
     var d = parseDue(text, day || today()); text = d.text; out.due = d.due;
     text = text.trim();
-    var sep = out.forced && out.forced !== 'flowon' ? null : SEP.exec(text), lead = out.forced ? null : /^(flow-?on|bridge)\b[:\s]*/i.exec(text);
+    var sep = out.forced && out.forced !== 'flowon' ? null : SEP.exec(text), lead = out.forced ? null : /^(clash|flow-?on|bridge)\b[:\s]*/i.exec(text);
     if (out.forced && out.forced !== 'flowon') { out.type = out.forced; out.text = text; }
     else if (sep) { out.type = 'flowon'; out.text = text.slice(0, sep.index).trim(); out.action = text.slice(sep.index + sep[0].length).trim(); }
     else if (lead) { out.type = 'flowon'; out.text = text.slice(lead[0].length).trim(); }
     else { out.text = text; if (out.forced) out.type = out.forced; else if (people.length || out.priority || out.due || VERBS.test(text)) out.type = 'action'; }
     if (out.forced === 'flowon') out.type = 'flowon';
-    if (out.type === 'flowon' && lead && sep) out.text = out.text.replace(/^(flow-?on|bridge)\b[:\s]*/i, '');
+    if (out.type === 'flowon' && lead && sep) out.text = out.text.replace(/^(clash|flow-?on|bridge)\b[:\s]*/i, '');
     out.who = people.map(function (p) { return p.handle; }).filter(function (h, k, a) { return a.indexOf(h) === k; }).join(' ');   // one or more (1.7): @AK @SR is 'AK SR'
     if (place) { out.area = place.area || ''; out.itp = place.itp || ''; out.tag = place.tag || ''; out.there = true; }
     return out;
   }
-  var TYPE = { note: 'Note', flowon: 'Flow-on', action: 'Action', itp: 'ITP' };
+  var TYPE = { note: 'Note', flowon: 'Clash', action: 'Action', itp: 'ITP' };
   var CYCLE = ['note', 'flowon', 'action', 'itp'];
 
   // ---------- days ----------
@@ -182,7 +182,7 @@
     };
     if (recent.length) html += '<div class="kick">THIS WEEK</div>' + recent.map(card).join('');
     if (earlier.length) html += S.showEarlier ? '<div class="kick">EARLIER</div>' + earlier.map(card).join('') : '<button type="button" class="day" data-act="earlier"><span class="muted small">Earlier · ' + earlier.length + ' day' + (earlier.length > 1 ? 's' : '') + (earlier.some(function (d) { return d.unshipped; }) ? '' : ', all sent') + ' ▸</span></button>';
-    if (!ds.length) html += '<div class="empty"><b>Nothing logged yet.</b><br>Start the day and type: a note, a photo, a flow-on (<b>what changed ; what next</b>) or an action (<b>@person</b>). A day you don’t log anything has no card.</div>';
+    if (!ds.length) html += '<div class="empty"><b>Nothing logged yet.</b><br>Start the day and type: a note, a photo, a clash (<b>what changed ; what next</b>) or an action (<b>@person</b>). A day you don’t log anything has no card.</div>';
     var hasT = ds.some(function (d) { return d.day === t; });
     main.innerHTML = '<div class="scroll"><div class="pad">' + html + '</div></div><div class="foot"><button type="button" class="btn primary" data-act="today">' + (hasT ? 'Open today' : '＋ Start day') + '</button>' +
       '<button type="button" class="btn ship' + (waiting.length ? '' : ' done') + '" data-act="ship">Ship' + (waiting.length ? '<span class="count">' + waiting.length + '</span>' : '') + '</button></div>';
@@ -224,11 +224,11 @@
       '<button type="button" class="icon' + (S.findOpen ? ' on' : '') + '" data-act="findday" aria-label="Search this day"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg></button></div>' +
       (S.findOpen ? '<div class="findbar"><input type="search" id="find-day" placeholder="Search this day" value="' + esc(S.find) + '" aria-label="Search this day"><span>' + (q ? shown.length + ' of ' + es.length : '') + '</span></div>' : '') +
       '<div class="chat" id="chat">' + (q && shown.length < es.length ? '<span class="note-c">' + (es.length - shown.length) + ' lines hidden · tap one to see it in the chat</span>' : '') +
-      (shown.length ? shown.map(function (e) { return entryHtml(e, q); }).join('') : '<div class="empty">' + (q ? 'Nothing matches.' : 'Type below: a note, a photo, a flow-on (<b>what changed ; what next</b>) or an action (<b>@person</b>, <b>P1</b>, <b>fri</b>). <b>at SBR 1</b> says where you are.') + '</div>') + '</div>' +
+      (shown.length ? shown.map(function (e) { return entryHtml(e, q); }).join('') : '<div class="empty">' + (q ? 'Nothing matches.' : 'Type below: a note, a photo, a clash (<b>what changed ; what next</b>) or an action (<b>@person</b>, <b>P1</b>, <b>fri</b>). <b>at SBR 1</b> says where you are.') + '</div>') + '</div>' +
       (loc ? '<div class="loc"><span class="l">AT</span><b>' + esc(loc) + '</b><button type="button" data-act="unloc" aria-label="Clear where you are">×</button></div>' : '') +
       '<div class="comp"><div class="reads" id="reads"></div><div class="sug" id="sug"></div>' + (S.photo ? '<span class="thumb"><img src="' + S.photo + '" alt="Photo to send">Photo goes with the next line<button type="button" data-act="nophoto" aria-label="Remove the photo">×</button></span>' : '') +
       (S.edit ? pinHtml() : '') + '<div class="comp-row"><button type="button" class="cam" data-act="photo" aria-label="Add a photo"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="6" width="18" height="14" rx="2"/><circle cx="12" cy="13" r="3.5"/><path d="M9 6l1.5-2h3L15 6"/></svg></button>' +
-      '<textarea id="box" rows="1" placeholder="Note, flow-on (;) or @action…" aria-label="Write a line" enterkeyhint="send"></textarea><button type="button" class="send" id="send" data-act="send">' + (S.edit ? 'Save' : 'Send') + '</button></div></div>';
+      '<textarea id="box" rows="1" placeholder="Note, clash (;) or @action…" aria-label="Write a line" enterkeyhint="send"></textarea><button type="button" class="send" id="send" data-act="send">' + (S.edit ? 'Save' : 'Send') + '</button></div></div>';
     var box = $('box');
     if (S.edit) { var ed = S.entries.filter(function (e) { return e.id === S.edit; })[0]; if (ed) box.value = ed.raw || ''; }
     else if (S.draft) box.value = S.draft;
@@ -272,7 +272,7 @@
         : (S.lastLine && !p.itp ? '<button type="button" class="chip itp" data-act="lastline">＋ ' + esc(S.lastLine.itp + ' ' + S.lastLine.line) + '</button>' : '') + '<span class="chip warn">' + (p.itp ? 'no line: ' : '') + 'sorted on the PC</span>') : '');
   }
   function matches(e, q) {
-    if (q === 'flow-ons' || q === 'flowons' || q === 'flow-on') return e.type === 'flowon';
+    if (q === 'clashes' || q === 'flowons' || q === 'clash') return e.type === 'flowon';
     if (q === 'actions' || q === 'action') return e.type === 'action';
     if (q === 'notes' || q === 'note') return e.type === 'note';
     if (q === 'itp' || q === 'itps') return e.type === 'itp';
@@ -322,7 +322,7 @@
     var byDay = {}; es.forEach(function (e) { (byDay[e.day] = byDay[e.day] || []).push(e); });
     var days = Object.keys(byDay).sort().reverse(), un = {}; daysOf().forEach(function (d) { un[d.day] = d.unshipped; });
     main.innerHTML = '<div class="findbar" style="background:var(--panel);border-color:var(--line)"><button type="button" class="icon" data-act="back" aria-label="Back to days"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button><input type="search" id="find-all" placeholder="Search every day" value="' + esc(S.findAll) + '" aria-label="Search every day"></div>' +
-      '<div class="filters">' + [['all', 'All'], ['note', 'Notes'], ['flowon', 'Flow-ons'], ['action', 'Actions'], ['itp', 'ITP']].map(function (x) { return '<button type="button" data-filter="' + x[0] + '"' + (f === x[0] ? ' class="on"' : '') + '>' + x[1] + '</button>'; }).join('') + '</div>' +
+      '<div class="filters">' + [['all', 'All'], ['note', 'Notes'], ['flowon', 'Clashes'], ['action', 'Actions'], ['itp', 'ITP']].map(function (x) { return '<button type="button" data-filter="' + x[0] + '"' + (f === x[0] ? ' class="on"' : '') + '>' + x[1] + '</button>'; }).join('') + '</div>' +
       '<div class="scroll"><div class="pad" style="gap:0">' + (q || f !== 'all' ? '<div class="kick" style="padding-bottom:6px">' + es.length + ' line' + (es.length === 1 ? '' : 's') + ' on ' + days.length + ' day' + (days.length === 1 ? '' : 's') + '</div>' : '') +
       days.map(function (d) {
         return '<div class="res-day">' + (d === today() ? 'Today · ' : '') + esc(dayLabel(d)) + (un[d] && d !== today() ? ' <span class="tag" style="color:var(--flow)">NOT SHIPPED</span>' : '') + '</div>' + byDay[d].map(function (e) {
@@ -331,7 +331,7 @@
           var where = e.itp ? (e.area ? e.area + ' · ' : '') + e.itp : e.area || e.tag || '';
           return '<button type="button" class="res" data-jump="' + esc(e.id) + '"><span class="tm">' + hm(e.time) + '</span><span style="display:flex;flex-direction:column;gap:3px"><span style="font-size:15px"><span class="' + dot + '">●</span> ' + mk(e.text) + (e.action ? ' <b>→ ' + mk(e.action) + '</b>' : '') + (e.who ? ' @' + esc(e.who) : '') + '</span>' + (where || e.photo ? '<span class="e-m">' + esc(where) + (e.photo ? (where ? ' · ' : '') + '▣ photo' : '') + '</span>' : '') + '</span></button>';
         }).join('');
-      }).join('') + (!days.length ? '<div class="empty">' + (q ? 'Nothing matches “' + esc(S.findAll) + '”.' : 'Type to search every day. <b>flow-ons</b>, <b>actions</b> or <b>@NH</b> work too.') + '</div>' : '') + '</div></div>';
+      }).join('') + (!days.length ? '<div class="empty">' + (q ? 'Nothing matches “' + esc(S.findAll) + '”.' : 'Type to search every day. <b>clashes</b>, <b>actions</b> or <b>@NH</b> work too.') + '</div>' : '') + '</div></div>';
     sync();
     var fa = $('find-all'); fa.oninput = function () { S.findAll = fa.value; var pos = fa.selectionStart; renderFindAll(); var f2 = $('find-all'); f2.focus(); f2.setSelectionRange(pos, pos); };
     if (!S.findAll) fa.focus();
@@ -348,8 +348,8 @@
       var mb = (JSON.stringify(es).length / 1048576);
       sheet('<div class="grip"></div><div style="display:flex;flex-direction:column;gap:4px"><h2>Ship to BTC</h2><p>Goes by email to the job’s BTC inbox and files itself into your diary.</p></div>' +
         '<div class="list">' + ds.map(function (d) { var cc = counts(d.entries); return '<label><input type="checkbox" data-pick="' + d.day + '"' + (S.shipPick[d.day] ? ' checked' : '') + '><span class="lt"><b>' + (d.day === today() ? 'Today · ' : '') + esc(dayLabel(d.day)) + (d.changed ? ' <span class="tag" style="color:var(--flow)">CHANGED</span>' : d.day < today() ? ' <span class="tag" style="color:var(--flow)">NOT SHIPPED</span>' : '') + '</b><span>' + d.entries.length + ' entr' + (d.entries.length === 1 ? 'y' : 'ies') + (cc.photo ? ' · ' + cc.photo + ' photo' + (cc.photo > 1 ? 's' : '') : '') + (d.gone ? ' · ' + d.gone + ' deleted' : '') + '</span></span></label>'; }).join('') + '</div>' +
-        '<div class="tiles"><div class="tile n"><b>' + c.note + '</b><span>notes</span></div><div class="tile f"><b>' + c.flowon + '</b><span>flow-ons</span></div><div class="tile a"><b>' + c.action + '</b><span>actions</span></div>' + (c.itp ? '<div class="tile i"><b>' + c.itp + '</b><span>ITP</span></div>' : '') + '</div>' +
-        (noAct.length ? '<button type="button" class="bar-warn" data-fix="' + esc(noAct[0].id) + '" style="text-align:left">' + (noAct.length === 1 ? '1 flow-on has' : noAct.length + ' flow-ons have') + ' no action yet: <b>' + esc(noAct[0].text) + '</b><span style="margin-left:auto;color:var(--flow);font-weight:700;padding-right:8px">Fix ›</span></button>' : '') +
+        '<div class="tiles"><div class="tile n"><b>' + c.note + '</b><span>notes</span></div><div class="tile f"><b>' + c.flowon + '</b><span>clashes</span></div><div class="tile a"><b>' + c.action + '</b><span>actions</span></div>' + (c.itp ? '<div class="tile i"><b>' + c.itp + '</b><span>ITP</span></div>' : '') + '</div>' +
+        (noAct.length ? '<button type="button" class="bar-warn" data-fix="' + esc(noAct[0].id) + '" style="text-align:left">' + (noAct.length === 1 ? '1 clash has' : noAct.length + ' clashes have') + ' no action yet: <b>' + esc(noAct[0].text) + '</b><span style="margin-left:auto;color:var(--flow);font-weight:700;padding-right:8px">Fix ›</span></button>' : '') +
         '<button type="button" class="btn primary" data-act="doship"' + (pick.length ? '' : ' disabled') + ' style="min-height:56px;font-size:17px">Ship to Outlook</button>' +
         '<span class="fname">' + esc(fileName(pick)) + ' · ' + (mb < 0.1 ? '<0.1' : mb.toFixed(1)) + ' MB</span>');
       $('sheet').querySelectorAll('[data-pick]').forEach(function (cb) { cb.onchange = function () { S.shipPick[cb.dataset.pick] = cb.checked; draw(); }; });
@@ -416,7 +416,7 @@
       '<button type="button" data-act="me"><span class="lt"><b>You: ' + esc(S.me ? S.me.name : 'not picked') + '</b><span>Whose diary your days go into</span></span></button>' +
       (p.demo ? '' : '<button type="button" data-act="demo"><span class="lt"><b>Try the demo</b><span>A made-up job to practise on. Your job’s lines stay on the phone.</span></span></button>') + '</div>' +
       '<div class="sec">ON THIS PHONE</div><p>' + n + ' line' + (n === 1 ? '' : 's') + ' for this job. Nothing leaves the phone until you ship. Keep BTC Walk on your Home Screen (Safari › Share › Add to Home Screen) so the phone keeps them.</p>' +
-      '<div class="sec">HOW TO WRITE</div><p><b>plinth moved 25 mm ; shop drawing 25 mm shorter</b> is a flow-on (or use --). <b>@NH</b> makes it NH’s action; <b>P1</b>, <b>fri</b>, <b>28-11</b> set priority and due. <b>@SBR 1</b> or <b>@ITP-06</b> tags where it is; <b>at SBR 1</b> on its own moves you there. Tap <b>LOG AS</b> to change the type.</p>' +
+      '<div class="sec">HOW TO WRITE</div><p><b>plinth moved 25 mm ; shop drawing 25 mm shorter</b> is a clash (or use --). <b>@NH</b> makes it NH’s action; <b>P1</b>, <b>fri</b>, <b>28-11</b> set priority and due. <b>@SBR 1</b> or <b>@ITP-06</b> tags where it is; <b>at SBR 1</b> on its own moves you there. Tap <b>LOG AS</b> to change the type.</p>' +
       '<p class="mono" style="font-size:11px">BTC Walk ' + VERSION + '</p>');
   }
   // Sheets rise from the bottom and slide away; drag one down to close it (1.3).
