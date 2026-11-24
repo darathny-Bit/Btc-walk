@@ -6,7 +6,7 @@
    (⋮ › Load project). No server, nothing sent anywhere else. */
 'use strict';
 (function () {
-  var VERSION = '2.0';
+  var VERSION = '2.0.1';
   var FORMAT = 'btcwalk', PFORMAT = 'btcproject';
 
   // ---------- the demo job (generic) ----------
@@ -488,7 +488,7 @@
       (p.demo ? '' : '<button type="button" data-act="demo"><span class="lt"><b>Try the demo</b><span>A made-up job to practise on. Your job’s lines stay on the phone.</span></span></button>') + '</div>' +
       '<div class="sec">On this phone</div>' + (function () { var o = oldShipped(); return o.length ? '<div class="list"><button type="button" data-act="clearold"><span class="lt"><b>Free up space</b><span>Clear ' + o.length + ' shipped line' + (o.length === 1 ? '' : 's') + ' older than a month (' + (JSON.stringify(o).length / 1048576).toFixed(1) + ' MB). They’re safe in BTC.</span></span></button></div>' : ''; })() + '<p>' + n + ' line' + (n === 1 ? '' : 's') + ' for this job. Nothing leaves the phone until you ship. Keep BTC Walk on your Home Screen (Safari › Share › Add to Home Screen) so the phone keeps them.</p>' +
       '<div class="sec">How to write</div><p><b>plinth moved 25 mm ; shop drawing 25 mm shorter</b> is a clash (or use --). <b>@NH</b> makes it NH’s action; <b>P1</b>, <b>fri</b>, <b>28-11</b> set priority and due. <b>@SBR 1</b> or <b>@ITP-06</b> tags where it is; <b>at SBR 1</b> on its own moves you there. Tap <b>LOG AS</b> to change the type.</p>' +
-      '<p class="mono" style="font-size:11px">BTC Walk ' + VERSION + '</p>');
+      '<div class="sec">This app</div><div class="list"><button type="button" data-act="checkupd"><span class="lt"><b>BTC Walk ' + esc(VERSION) + '</b><span>' + (upd.seen && upd.seen !== VERSION ? 'Version ' + esc(upd.seen) + ' is out: tap to check again' : 'Check for an update') + '</span></span></button></div>');
   }
   // Sheets rise from the bottom and slide away; drag one down to close it (1.3).
   var sheetT = null;
@@ -731,6 +731,8 @@
     else if (act === 'undo') { var u = toastUndo; toastUndo = null; $('toast').hidden = true; if (u) { await u.fn(); toast('Undone'); } }
     else if (act === 'closesheet') closeSheet();
     else if (act === 'clearold') clearOld();
+    else if (act === 'update') doUpdate();
+    else if (act === 'checkupd') { closeSheet(); checkUpdate(true); }
     else if (act === 'earlier') { S.showEarlier = true; renderDays(); }
     else if (act === 'ship') shipSheet();
     else if (act === 'doship') doShip();
@@ -774,16 +776,46 @@
   document.addEventListener('focusout', function () { setTimeout(function () { var a = document.activeElement; if (!a || !/^(TEXTAREA|INPUT)$/.test(a.tagName)) { if (window.scrollY || document.documentElement.scrollTop) window.scrollTo(0, 0); } }, 120); });
   if (window.visualViewport) window.visualViewport.addEventListener('resize', function () { if (window.visualViewport.height >= window.innerHeight - 1 && window.scrollY) window.scrollTo(0, 0); });
 
+  // ---------- updates (2.0.1) ----------
+  // Each time the app opens or comes back on screen (and every 10 minutes while it's open) it asks for version.json,
+  // straight from the site (never a saved copy). A newer version shows a bar: tap to update. Your lines are in the
+  // phone's storage, not in the app's files, so updating never touches them. version.json changes with VERSION.
+  var upd = { seen: '', at: 0 };
+  async function checkUpdate(force) {
+    if (!force && Date.now() - upd.at < 60000) return; upd.at = Date.now();
+    try {
+      var r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' }); if (!r.ok) return;
+      var v = (await r.json()).v;
+      if (v && v !== VERSION) showUpdate(v); else if (force) toast('You’re on the newest: BTC Walk ' + VERSION + '.');
+    } catch (e) { if (force) toast('No signal: can’t check for an update now.', true); }
+  }
+  function showUpdate(v) {
+    upd.seen = v; var b = $('upd');
+    if (!b) { b = document.createElement('button'); b.type = 'button'; b.id = 'upd'; b.className = 'upd'; b.dataset.act = 'update'; document.body.insertBefore(b, document.body.firstChild); }
+    b.innerHTML = '<span>New version ' + esc(v) + '</span><b>Tap to update</b>';
+  }
+  async function doUpdate() {
+    var b = $('upd'); if (b) b.innerHTML = '<span>Updating…</span>';
+    try {
+      if (navigator.serviceWorker) { var reg = await navigator.serviceWorker.getRegistration(); if (reg) await reg.update(); }
+      if (window.caches) { var ks = await caches.keys(); await Promise.all(ks.filter(function (k) { return !/-fonts$/.test(k); }).map(function (k) { return caches.delete(k); })); }
+    } catch (e) { /* reload anyway */ }
+    location.reload();
+  }
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') checkUpdate(); });
+  setInterval(function () { if (document.visibilityState === 'visible') checkUpdate(); }, 600000);
+
   // ---------- start ----------
   (async function start() {
     try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) { /* best effort */ }
     if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(function () { /* offline cache is a bonus */ });
     var p = await kvGet('project');
-    if (!p) { H.ready = true; history.replaceState({ walk: 'root' }, ''); await useDemo(); return; }
+    if (!p) { H.ready = true; history.replaceState({ walk: 'root' }, ''); await useDemo(); checkUpdate(); return; }
     S.proj = p; S.entries = await allEntries(p.project.id);
     S.me = (await kvGet('me:' + p.project.id)) || null; S.loc = (await kvGet('loc')) || null; S.lastLine = (await kvGet('lastLine:' + p.project.id)) || null; S.gone = (await kvGet('gone:' + p.project.id)) || [];
     H.ready = true; history.replaceState({ walk: 'root' }, ''); render();
     if (!S.me && !p.demo) pickMe();
+    checkUpdate();
   })();
   // Swipe back on iPhone (1.2). A Home Screen app on iPhone has no swipe-back of its own, so BTC Walk does it: start at
   // the left edge and drag right, the same steps as Back on Android. Only in the Home Screen app on iPhone (in Safari,

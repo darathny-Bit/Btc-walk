@@ -65,6 +65,10 @@ BTC Walk only talks to BTC through two files.
   "walks": [], "closures": [] }
 ```
 
+## Updates (2.0.1)
+
+The app checks `version.json` each time it opens or comes back on screen, straight from the site; a newer version shows a lime bar, **Tap to update**. Lines live in the phone's storage, so updating never touches them. When releasing, change `VERSION` in `app.js` and `version.json` together (and the `?v=` numbers in `index.html` and `sw.js`, and `CACHE` in `sw.js`).
+
 ## This repo
 App code only: `index.html`, `app.js`, `styles.css`, `sw.js` (keeps the app working with no signal), `manifest.webmanifest`, `icons/`. **Never commit a project file, a ship file or anything from a real job.** The demo job is made up.
 

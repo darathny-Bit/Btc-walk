@@ -248,6 +248,11 @@ mark { background: rgba(212,255,58,.22); color: #E9FF9A; border-radius: 4px; pad
 .shipped h2 { margin-top: 12px; font-size: 28px; }
 .dotl { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; }
 
+/* a new version (2.0.1) */
+.upd { flex: none; display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px; padding: calc(var(--safe-t) + 8px) 16px 8px; border: 0; background: var(--lime); color: var(--lime-ink); font-size: 14px; text-align: left; animation: line-in .3s var(--spring); }
+.upd span { flex: 1; font-weight: 500; } .upd b { font-weight: 700; }
+.upd + .bar { padding-top: 8px; }
+
 /* toast: a dark glass pill, with Undo when there is one */
 .toast { position: fixed; left: 14px; right: 14px; bottom: calc(var(--safe-b) + 150px); z-index: 60; display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 6px 6px 6px 16px; border-radius: 24px; background: rgba(30,35,38,.94); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,.08); color: var(--ink); font-size: 14px; font-weight: 500; box-shadow: 0 14px 36px rgba(0,0,0,.6); }
 .toast .tt { flex: 1; padding: 6px 0; }
