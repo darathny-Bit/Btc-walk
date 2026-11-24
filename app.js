@@ -6,7 +6,7 @@
    (⋮ › Load project). No server, nothing sent anywhere else. */
 'use strict';
 (function () {
-  var VERSION = '2.0.1';
+  var VERSION = '2.1';
   var FORMAT = 'btcwalk', PFORMAT = 'btcproject';
 
   // ---------- the demo job (generic) ----------
@@ -45,7 +45,7 @@
   var allEntries = function (proj) { return tx('entries', 'readonly', function (s) { return s.index('proj').getAll(proj); }); };
 
   // ---------- state ----------
-  var S = { proj: null, me: null, entries: [], view: 'days', day: null, find: '', findAll: '', filter: 'all', edit: null, photos: [], as: null, loc: null };
+  var S = { proj: null, me: null, entries: [], view: 'days', day: null, find: '', findAll: '', filter: 'all', edit: null, photos: [], as: null, loc: null, wx: {} };
   var $ = function (id) { return document.getElementById(id); };
   var main = $('main');
   function esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
@@ -109,14 +109,31 @@
   // A word and a full stop at the start says what it is (1.6): note. action. clash. ITP. (the word is dropped; flow. still works). ITP is
   // evidence for an ITP line: @ITP-06 3.2 files it on that line in Build; plain @ITP (or no ITP) leaves it to sort on the
   // PC. @clash is the same as clash. (and the old @flow-on).
-  var LEAD = /^(note|action|clash|flow(?:-?on)?|itp)\.(?=\s|$)\s*/i;
+  // 2.1: delay. (lost time, "2h"), instruction. (EI/SI, who gave it with @), crew. (who's on site, "HEB 6, sparkies 4"),
+  // visitor. and weather. (or a weather word on its own line: rainy, fine, windy…).
+  var LEAD = /^(note|action|clash|flow(?:-?on)?|itp|delay|instruction|instr|ei|si|crew|labour|visitor|visit|weather|wx)\.(?=\s|$)\s*/i;
+  var LEADMAP = { delay: 'delay', instruction: 'instruction', instr: 'instruction', ei: 'instruction', si: 'instruction', crew: 'crew', labour: 'crew', visitor: 'visitor', visit: 'visitor', weather: 'weather', wx: 'weather' };
+  var WXONLY = /^(fine|sunny|clear|cloudy|overcast|showers|showery|drizzle|drizzly|rain|rainy|raining|wet|heavy rain|pouring|storm|stormy|windy|gusty|calm|cold|hot|frost|frosty|fog|foggy)(\s*(,|and|&)?\s*(fine|sunny|clear|cloudy|overcast|showers|showery|drizzle|rain|rainy|raining|wet|heavy rain|pouring|storm|stormy|windy|gusty|calm|cold|hot|frost|frosty|fog|foggy))*[.!]?$/i;
+  // What a weather line says, part by part; anything not said stays the forecast's guess.
+  function wxParse(t) {
+    t = String(t || '').toLowerCase(); var o = {};
+    if (/heavy rain|pouring|storm/.test(t)) o.sky = 'heavy'; else if (/\b(rain|rainy|raining|wet)\b/.test(t)) o.sky = 'rain'; else if (/shower|drizzl/.test(t)) o.sky = 'showers';
+    else if (/overcast|cloudy|fog/.test(t)) o.sky = 'cloudy'; else if (/\b(fine|sunny|clear|dry)\b/.test(t)) o.sky = 'fine';
+    var m = /(-?\d{1,2})\s*(°|deg|degrees|c\b)/.exec(t); if (m) o.temp = +m[1]; else if (/\bcold\b|frost/.test(t)) o.feel = 'cold'; else if (/\bhot\b/.test(t)) o.feel = 'hot';
+    var w = /(\d{1,3})\s*(km\/?h|kph)/.exec(t); if (w) o.wind = +w[1]; if (/windy|gust/.test(t)) o.windy = true; if (/\bcalm\b/.test(t)) o.windy = false;
+    return o;
+  }
+  function lostHours(t) { var h = /(\d+(?:\.\d+)?)\s*(h|hr|hrs|hour|hours)\b/i.exec(t), mm = /(\d+)\s*(m|min|mins|minutes)\b/i.exec(t); return (h ? +h[1] : 0) + (mm ? +mm[1] / 60 : 0); }
+  function crewOf(t) { var out = [], re = /([A-Za-z][A-Za-z &'-]*?)\s+(\d+)(?=\s*(,|;|$|\s+[A-Za-z]))/g, m; while ((m = re.exec(t))) out.push({ who: m[1].trim(), n: +m[2] }); return out; }
   function lineOf(code, no) { var it = itpByCode(code); return it && (it.lines || []).filter(function (l) { return l.no === no; })[0] || null; }
   function itpByCode(code) { var k = key(code), hit = null; (S.proj.areas || []).forEach(function (a) { (a.itps || []).forEach(function (i) { if (!hit && key(i.code) === k) hit = i; }); }); return hit; }
   function parse(raw, day) {
     var text = String(raw || '').trim(), out = { type: 'note', text: '', action: '', who: '', area: '', itp: '', tag: '', line: '', priority: '', due: '', move: null, notFound: [], forced: '' };
     if (!text) return out;
     var ld = LEAD.exec(text);
-    if (ld) { var w = ld[1].toLowerCase(); out.forced = w === 'itp' ? 'itp' : /^(flow|clash)/.test(w) ? 'flowon' : w; text = text.slice(ld[0].length); }
+    if (ld) { var w = ld[1].toLowerCase(); out.forced = LEADMAP[w] || (w === 'itp' ? 'itp' : /^(flow|clash)/.test(w) ? 'flowon' : w); text = text.slice(ld[0].length); }
+    else if (WXONLY.test(text)) out.forced = 'weather';
+    if (out.forced === 'weather' || out.forced === 'crew') { out.type = out.forced; out.text = text; if (out.forced === 'weather') out.wx = wxParse(text); else out.crew = crewOf(text); return out; }
     text = text.replace(/(^|\s)@(clash|flow-?on)\b/i, function () { if (!out.forced) out.forced = 'flowon'; return ' '; }).trim();
     text = text.replace(/(^|\s)@itp(?=\s|$)/i, function () { if (!out.forced) out.forced = 'itp'; return ' '; }).trim();
     var mv = /^at\s+(.+)$/i.exec(text);
@@ -150,9 +167,10 @@
     if (out.type === 'flowon' && lead && sep) out.text = out.text.replace(/^(clash|flow-?on|bridge)\b[:\s]*/i, '');
     out.who = people.map(function (p) { return p.handle; }).filter(function (h, k, a) { return a.indexOf(h) === k; }).join(' ');   // one or more (1.7): @AK @SR is 'AK SR'
     if (place) { out.area = place.area || ''; out.itp = place.itp || ''; out.tag = place.tag || ''; out.there = true; }
+    if (out.type === 'delay') out.lost = Math.round(lostHours(String(raw)) * 100) / 100;
     return out;
   }
-  var TYPE = { note: 'Note', flowon: 'Clash', action: 'Action', itp: 'ITP' };
+  var TYPE = { note: 'Note', flowon: 'Clash', action: 'Action', itp: 'ITP', delay: 'Delay', instruction: 'Instruction', crew: 'Crew', visitor: 'Visitor', weather: 'Weather' };
   var CYCLE = ['note', 'flowon', 'action', 'itp'];
 
   // ---------- days ----------
@@ -167,7 +185,7 @@
       return { day: d, entries: es, unshipped: changed || es.some(function (e) { return !e.shipped; }), changed: changed, gone: gone[d] || 0 };
     });
   }
-  function counts(es) { var c = { note: 0, flowon: 0, action: 0, itp: 0, photo: 0 }; es.forEach(function (e) { c[e.type] = (c[e.type] || 0) + 1; c.photo += pics(e).length; }); return c; }
+  function counts(es) { var c = { note: 0, flowon: 0, action: 0, itp: 0, photo: 0 }; es.forEach(function (e) { if (e.type === 'weather') return; c[e.type] = (c[e.type] || 0) + 1; c.photo += pics(e).length; }); return c; }
   function dotsRow(c) { return '<span class="dots-row"><span><span class="dot-n">●</span>' + c.note + '</span><span><span class="dot-f">●</span>' + c.flowon + '</span><span><span class="dot-a">●</span>' + c.action + '</span>' + (c.itp ? '<span><span class="dot-i">●</span>' + c.itp + '</span>' : '') + (c.photo ? '<span class="muted">▣ ' + c.photo + '</span>' : '') + '</span>'; }
   var RESHIP = '<span class="flag">✎ Changed · reship</span>';
   var FLAG = '<span class="flag"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke-width="2.6" aria-hidden="true"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg>Not shipped</span>';
@@ -213,13 +231,14 @@
   function pics(e) { return e && e.photos && e.photos.length ? e.photos : e && e.photo ? [e.photo] : []; }
   var MAXPICS = 10;
   function picsHtml(ps) { return ps.length ? '<span class="e-ph n' + Math.min(ps.length, 3) + '">' + ps.map(function (p, i) { return '<img src="' + p + '" alt="Photo ' + (i + 1) + '">'; }).join('') + '</span>' : ''; }
+  function fmtH(h) { return h >= 1 ? (Math.round(h * 10) / 10) + ' h' : Math.round(h * 60) + ' min'; }
   function whoTxt(w) { return String(w || '').split(/\s+/).filter(Boolean).map(function (h) { return '@' + h; }).join(' '); }
   function itpHead(e) { return 'ITP · ' + (e.itp && e.line ? esc(e.itp) + ' ' + esc(e.line) : 'TO SORT ON THE PC'); }
   function entryHtml(e, hl) {
     var mark = function (s) { s = esc(s); if (!hl) return s; var q = hl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); return s.replace(new RegExp('(' + esc(q) + ')', 'ig'), '<mark>$1</mark>'); };
     var where = e.itp ? (e.area ? e.area + ' · ' : '') + e.itp : e.area || e.tag || '';
     var who = e.who ? whoTxt(e.who) + ' · ' : '';
-    var head = e.type === 'action' ? 'ACTION · ' + (e.who ? esc(whoTxt(e.who)) : 'you') + (e.priority ? ' · ' + esc(e.priority) : '') : e.type === 'itp' ? itpHead(e) : TYPE[e.type].toUpperCase();
+    var head = e.type === 'action' ? 'ACTION · ' + (e.who ? esc(whoTxt(e.who)) : 'you') + (e.priority ? ' · ' + esc(e.priority) : '') : e.type === 'itp' ? itpHead(e) : e.type === 'delay' ? 'DELAY' + (e.lost ? ' · ' + fmtH(e.lost).toUpperCase() + ' LOST' : '') : e.type === 'instruction' ? 'INSTRUCTION' + (e.who ? ' · FROM ' + esc(whoTxt(e.who)) : '') : (TYPE[e.type] || 'Note').toUpperCase();
     var meta = [where ? '<span class="' + (e.there ? 'there' : '') + '">' + mark(where) + '</span>' : '', e.type !== 'action' && who ? esc(who.replace(' · ', '')) : '', e.due ? 'due ' + esc(dayLabel(e.due)) : '', e.edited ? 'edited' : '', (e.notFound || []).length ? '<span class="nf">@' + esc(e.notFound.join(' @')) + ' not found</span>' : ''].filter(Boolean).join(' · ');
     var ed = S.edit === e.id;
     return '<button type="button" class="e ' + e.type + (ed ? ' ed' : '') + (S.fresh === e.id ? ' new' : '') + '" data-e="' + esc(e.id) + '"><span class="e-h"><span class="e-k">' + (ed ? PEN : '') + head + '</span><span>' + hm(e.time) + (e.shipped ? ' ✓' : '') + '</span></span>' +
@@ -242,8 +261,8 @@
   function dayHead(d, es) {
     var c = counts(es), t = today(), dd = dayDate(d);
     var chip = function (cls, n, w) { return n ? '<span><i class="' + cls + '"></i>' + n + ' ' + w + '</span>' : ''; };
-    return '<div class="dayhead"><div class="k">' + (d === t ? 'Today' : d === addDays(t, -1) ? 'Yesterday' : dd.getDate() + ' ' + MO[dd.getMonth()] + ' ' + dd.getFullYear()) + '</div><h1>' + ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dd.getDay()] + '</h1>' +
-      (es.length ? '<div class="chips">' + chip('dot-n', c.note, 'note' + (c.note === 1 ? '' : 's')) + chip('dot-f', c.flowon, 'clash' + (c.flowon === 1 ? '' : 'es')) + chip('dot-a', c.action, 'action' + (c.action === 1 ? '' : 's')) + chip('dot-i', c.itp, 'ITP') + (c.photo ? '<span>▣ ' + c.photo + ' photo' + (c.photo === 1 ? '' : 's') + '</span>' : '') + '</div>' : '') + '</div>';
+    return '<div class="dayhead" id="dayhead"><div class="k">' + (d === t ? 'Today' : d === addDays(t, -1) ? 'Yesterday' : dd.getDate() + ' ' + MO[dd.getMonth()] + ' ' + dd.getFullYear()) + '</div><h1>' + ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dd.getDay()] + '</h1>' +
+      (es.length ? '<div class="chips">' + chip('dot-n', c.note, 'note' + (c.note === 1 ? '' : 's')) + chip('dot-f', c.flowon, 'clash' + (c.flowon === 1 ? '' : 'es')) + chip('dot-a', c.action, 'action' + (c.action === 1 ? '' : 's')) + chip('dot-i', c.itp, 'ITP') + (c.photo ? '<span>▣ ' + c.photo + ' photo' + (c.photo === 1 ? '' : 's') + '</span>' : '') + '</div>' : '') + '<div id="wxslot"></div></div>';
   }
   function placeOf(e) { return e.location || ''; }
   function withPlaces(list, q) {
@@ -256,7 +275,7 @@
   }
   function renderDay() {
     var d = S.day, es = S.entries.filter(function (e) { return e.day === d; }).sort(function (a, b) { return a.time < b.time ? -1 : 1; });
-    var q = S.find.trim().toLowerCase(), shown = q ? es.filter(function (e) { return matches(e, q); }) : es;
+    var q = S.find.trim().toLowerCase(), shown = q ? es.filter(function (e) { return matches(e, q); }) : es.filter(function (e) { return e.type !== 'weather'; });   // weather lives in the strip (2.1)
     var un = es.some(function (e) { return !e.shipped; });
     var loc = S.loc ? (S.loc.itp ? (S.loc.area ? S.loc.area + ' · ' : '') + S.loc.itp : S.loc.name) : '';
     main.innerHTML = '<div class="dhead"><button type="button" class="icon" data-act="back" aria-label="Back to days"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>' +
@@ -280,6 +299,7 @@
     // keyboard up or down: the chat gets shorter or taller; if you were at the newest line, stay there (1.1)
     S.stick = !q; chat.onscroll = function () { S.stick = chat.scrollHeight - chat.scrollTop - chat.clientHeight < 40; };
     if (window.ResizeObserver) new ResizeObserver(function () { if (S.stick) chat.scrollTop = chat.scrollHeight; }).observe(chat);
+    if (!q) wxBlock(d, es).then(function (h) { var sl = $('wxslot'); if (sl && S.view === 'day' && S.day === d) { var was = chat.scrollHeight - chat.scrollTop; sl.innerHTML = h; if (S.stick) chat.scrollTop = chat.scrollHeight; } });
     sync();
   }
   function grow() { var b = $('box'); if (!b) return; b.style.height = 'auto'; b.style.height = Math.min(140, b.scrollHeight + 2) + 'px'; }
@@ -302,10 +322,12 @@
     if (!v.trim() && !S.photos.length) { r.innerHTML = ''; return; }
     if (p.move) { r.innerHTML = 'Moves you to <span class="chip">' + esc(p.move.name) + '</span>'; return; }
     var type = S.as || p.type;
+    if (type === 'weather') { r.innerHTML = 'Logs the weather <span class="chip here">' + esc(wxWords(p.wx) || 'as you say it') + '</span><span class="chip">the rest stays the forecast’s guess</span>'; return; }
+    if (type === 'crew') { r.innerHTML = 'Crew on site <span class="chip">' + esc((p.crew || []).map(function (c) { return c.who + ' ' + c.n; }).join(' · ') || 'type who and how many: HEB 6, sparkies 4') + '</span>'; return; }
     var where = p.itp ? (p.area ? p.area + ' · ' : '') + p.itp : p.area || p.tag || '';
     r.innerHTML = 'Log as <button type="button" class="as ' + type + '" data-act="as">' + TYPE[type].toUpperCase() + ' ▾</button>' +
       (where ? '<span class="chip warn">@ ' + esc(where) + '</span>' : '') + (type === 'action' ? '<span class="chip">' + (p.who ? esc(whoTxt(p.who)) : 'you') + '</span>' : p.who ? '<span class="chip">@' + esc(p.who) + '</span>' : '') +
-      (p.priority ? '<span class="chip">' + p.priority + '</span>' : '') + (p.due ? '<span class="chip">due ' + esc(dayLabel(p.due)) + '</span>' : '') +
+      (type === 'delay' ? '<span class="chip warn">' + (p.lost ? fmtH(p.lost) + ' lost' : 'add the time lost: 2h, 30 min') + '</span>' : '') + (p.priority ? '<span class="chip">' + p.priority + '</span>' : '') + (p.due ? '<span class="chip">due ' + esc(dayLabel(p.due)) + '</span>' : '') +
       (type === 'flowon' ? (p.action ? '<span class="chip">→ ' + esc(p.action) + '</span>' : '<span class="chip warn">no action yet: add ; and what next</span>') : '') +
       (p.notFound.length ? '<span class="chip nf">@' + esc(p.notFound.join(' @')) + ' not found</span>' : '') +
       (type === 'itp' ? (p.itp && p.line ? '<span class="chip">' + esc(p.line) + ' ' + esc((lineOf(p.itp, p.line) || {}).text || '') + '</span>'
@@ -344,15 +366,19 @@
     var where = p.there ? {} : S.loc ? { area: S.loc.area || '', itp: S.loc.itp || '', tag: S.loc.tag || '' } : {};
     if (S.edit) {
       var e = S.entries.filter(function (x) { return x.id === S.edit; })[0];
-      if (e) { Object.assign(e, { raw: raw, type: type, line: p.line, text: p.text || '', action: p.action, who: p.who, priority: p.priority, due: p.due, notFound: p.notFound, edited: true, shipped: false, there: !!p.there }, p.there ? { area: p.area, itp: p.itp, tag: p.tag } : {}); e.photos = S.photos.slice(); delete e.photo; await putEntry(e); }
+      if (e && e.shippedAt && !e.was) { e.was = e.raw || e.text; e.wasType = e.type; }   // amended after shipping (2.1): BTC prints the original too
+      if (e && e.shippedAt) e.amendedAt = new Date().toISOString();
+      if (e) { Object.assign(e, { wx: p.wx, crew: p.crew, lost: p.lost }); Object.assign(e, { raw: raw, type: type, line: p.line, text: p.text || '', action: p.action, who: p.who, priority: p.priority, due: p.due, notFound: p.notFound, edited: true, shipped: false, there: !!p.there }, p.there ? { area: p.area, itp: p.itp, tag: p.tag } : {}); e.photos = S.photos.slice(); delete e.photo; await putEntry(e); }
       S.edit = null; S.photos = []; S.as = null; renderDay(); toast('Saved'); return;
     }
     if (type === 'itp' && p.itp && p.line) { S.lastLine = { itp: p.itp, line: p.line }; kvSet('lastLine:' + S.proj.project.id, S.lastLine); }
     var en = { id: uid(), proj: S.proj.project.id, day: S.day, time: now, raw: raw, type: type, line: p.line, text: p.text || '', action: p.action, who: p.who, area: p.there ? p.area : where.area || '', itp: p.there ? p.itp : where.itp || '', tag: p.there ? p.tag : where.tag || '',
       location: S.loc ? S.loc.name : '', priority: p.priority, due: p.due, photos: S.photos.slice(), edited: false, shipped: false, notFound: p.notFound, there: !!p.there };
+    if (p.wx) en.wx = p.wx; if (p.crew) en.crew = p.crew; if (p.lost) en.lost = p.lost;
     S.entries.push(en); await putEntry(en);
     S.draft = ''; S.photos = []; S.as = null; S.fresh = en.id; buzz(8); renderDay(); S.fresh = null;
     var np = pics(en).length;
+    if (type === 'weather') { wxRefresh(); toast('Weather logged: ' + wxWords(en.wx) + '. The rest of the day stays the forecast’s guess.', false, { label: 'Undo', fn: async function () { S.entries = S.entries.filter(function (x) { return x.id !== en.id; }); await delEntry(en.id); if (S.view === 'day') renderDay(); } }); return; }
     toast(type === 'itp' ? (en.itp && en.line ? 'Logged on ' + en.itp + ' ' + en.line : 'Logged, to sort on the PC') + (np ? ' · ' + np + ' photo' + (np === 1 ? '' : 's') : '') : 'Logged' + (np ? ' · ' + np + ' photo' + (np === 1 ? '' : 's') : ''), false,
       { label: 'Undo', fn: async function () { S.entries = S.entries.filter(function (x) { return x.id !== en.id; }); await delEntry(en.id); S.draft = raw; S.photos = pics(en).slice(); if (S.view === 'day') renderDay(); } });
   }
@@ -438,9 +464,11 @@
     var es = [], pickDays = {}; pick.forEach(function (d) { es = es.concat(d.entries); pickDays[d.day] = true; });
     var gone = (S.gone || []).filter(function (g) { return pickDays[g.day]; });
     var body = { format: FORMAT, v: 1, project: { id: S.proj.project.id, code: S.proj.project.code, name: S.proj.project.name }, shippedBy: { name: S.me ? S.me.name : '', handle: S.me ? S.me.handle : '' }, shippedAt: new Date().toISOString(), app: 'BTC Walk ' + VERSION,
-      walks: [], entries: es.map(function (e) { return { id: e.id, day: e.day, time: e.time, type: e.type, raw: e.raw, text: e.text, action: e.action, who: e.who, area: e.area, itp: e.itp, line: e.line || '', tag: e.tag, location: e.location, priority: e.priority, due: e.due, photos: pics(e), photo: pics(e)[0] || '', edited: e.edited }; }), removed: gone.map(function (g) { return { id: g.id, day: g.day }; }), closures: [] };
+      walks: [], entries: es.map(function (e) { return { id: e.id, day: e.day, time: e.time, type: e.type, raw: e.raw, text: e.text, action: e.action, who: e.who, area: e.area, itp: e.itp, line: e.line || '', tag: e.tag, location: e.location, priority: e.priority, due: e.due, photos: pics(e), photo: pics(e)[0] || '', edited: e.edited, wx: e.wx, crew: e.crew, lost: e.lost, was: e.was, wasType: e.wasType, amendedAt: e.amendedAt }; }), removed: gone.map(function (g) { return { id: g.id, day: g.day }; }), closures: [] };
     // .btcwalk.txt as plain text (1.4.1): Android's share sheet refuses file types it doesn't know ("Permission denied"),
     // and plain text is one it always takes. BTC reads .btcwalk and .btcwalk.txt alike.
+    var wx = {}; for (var wi = 0; wi < pick.length; wi++) { var fc = await wxForecast(pick[wi].day); if (fc) wx[pick[wi].day] = fc; }
+    if (Object.keys(wx).length) body.weather = wx;   // the forecast BTC needs to draw the job's weather (2.1); logged weather goes as lines
     var name = fileName(pick), file = new File([JSON.stringify(body)], name, { type: 'text/plain' });
     var save = function () { var a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = name; document.body.appendChild(a); a.click(); a.remove(); };
     var shared = false;
@@ -485,6 +513,7 @@
     sheet('<div class="grip"></div><h2>' + esc(p.project.name) + '</h2>' +
       '<div class="list"><button type="button" data-act="load"><span class="lt"><b>Load project…</b><span>' + (p.demo ? 'The demo is loaded. Pick the file Build makes: ⋮ › Phone project file…' : 'Project file from ' + esc(made || '?') + '. Pick a newer one when the job changes.') + '</span></span></button>' +
       '<button type="button" data-act="me"><span class="lt"><b>You: ' + esc(S.me ? S.me.name : 'not picked') + '</b><span>Whose diary your days go into</span></span></button>' +
+      '<button type="button" data-act="wxset"><span class="lt"><b>Weather: ' + (wxOn() ? 'on' : 'off') + '</b><span>' + (wxOn() ? 'Forecast from MET Norway' + (siteLoc() ? '' : ' · set the site location') : 'Fill in each day’s weather from MET Norway') + '</span></span></button>' +
       (p.demo ? '' : '<button type="button" data-act="demo"><span class="lt"><b>Try the demo</b><span>A made-up job to practise on. Your job’s lines stay on the phone.</span></span></button>') + '</div>' +
       '<div class="sec">On this phone</div>' + (function () { var o = oldShipped(); return o.length ? '<div class="list"><button type="button" data-act="clearold"><span class="lt"><b>Free up space</b><span>Clear ' + o.length + ' shipped line' + (o.length === 1 ? '' : 's') + ' older than a month (' + (JSON.stringify(o).length / 1048576).toFixed(1) + ' MB). They’re safe in BTC.</span></span></button></div>' : ''; })() + '<p>' + n + ' line' + (n === 1 ? '' : 's') + ' for this job. Nothing leaves the phone until you ship. Keep BTC Walk on your Home Screen (Safari › Share › Add to Home Screen) so the phone keeps them.</p>' +
       '<div class="sec">How to write</div><p><b>plinth moved 25 mm ; shop drawing 25 mm shorter</b> is a clash (or use --). <b>@NH</b> makes it NH’s action; <b>P1</b>, <b>fri</b>, <b>28-11</b> set priority and due. <b>@SBR 1</b> or <b>@ITP-06</b> tags where it is; <b>at SBR 1</b> on its own moves you there. Tap <b>LOG AS</b> to change the type.</p>' +
@@ -615,6 +644,140 @@
     closeSheet(); render(); toast('Cleared ' + es.length + ' line' + (es.length === 1 ? '' : 's') + ' (' + mb.toFixed(1) + ' MB).');
   }
 
+  // ---------- weather (2.1) ----------
+  // The forecast for the site comes from MET Norway (api.met.no, free with credit, commercial use allowed), only once
+  // someone has read and accepted their terms in ⋮ › Weather, for the site's location (the project file's, or this phone's
+  // once, with permission). It's modelled weather, so it's a guess. A weather word on its own line ("rainy", "fine, windy")
+  // or weather. logs what it's actually like; that wins for the part it says (sky, temperature, wind), and the rest stays
+  // the forecast's guess. A logged sky holds until the forecast clearly moves on (wet: two dry, clearing hours in a row;
+  // dry: two hours of the forecast changing its mind), or someone logs again. Logged rain the forecast missed makes the rest
+  // of that day lean wetter. Each hour from 07:00 to 17:00 (wider if lines are logged outside) gets one call.
+  var WXSKY = { fine: 'Fine', cloudy: 'Cloudy', showers: 'Showers', rain: 'Rain', heavy: 'Heavy rain' };
+  var WET = { showers: 1, rain: 1, heavy: 1 };
+  function wxWords(w) { if (!w) return ''; var o = []; if (w.sky) o.push(WXSKY[w.sky].toLowerCase()); if (w.temp != null) o.push(w.temp + '°'); else if (w.feel) o.push(w.feel); if (w.wind != null) o.push(w.wind + ' km/h'); else if (w.windy) o.push('windy'); else if (w.windy === false) o.push('calm'); return o.join(', '); }
+  function wxOn() { return !!(S.wx && S.wx.on); }
+  function siteLoc() { var p = S.proj || {}; if (p.site && p.site.lat != null) return p.site; return S.wx && S.wx.loc || null; }
+  function skyOf(f, wetter) {
+    if (!f) return null;
+    var mm = f.mm || 0, cl = f.cloud == null ? 50 : f.cloud;
+    if (mm >= 2.5) return 'heavy'; if (mm >= 0.5) return 'rain'; if (mm > 0) return 'showers';
+    if (wetter && cl >= 60) return 'showers';
+    return cl >= 60 ? 'cloudy' : 'fine';
+  }
+  var COMPASS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+  function compass(deg) { return deg == null ? '' : COMPASS[Math.round(((deg % 360) + 360) % 360 / 45) % 8]; }
+  async function wxFetch(force) {
+    if (!wxOn() || !navigator.onLine) return;
+    var loc = siteLoc(); if (!loc) return;
+    var last = S.wx.at || 0; if (!force && Date.now() - last < 30 * 60000) return;
+    try {
+      var url = 'https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=' + (+loc.lat).toFixed(4) + '&lon=' + (+loc.lon).toFixed(4);
+      var res = await fetch(url, { cache: 'no-store' }); if (!res.ok) return;
+      var j = await res.json(), ts = (j.properties && j.properties.timeseries) || [], byDay = {};
+      ts.forEach(function (t) {
+        var d = new Date(t.time), day = ymd(d), h = d.getHours(), det = (t.data.instant || {}).details || {}, n1 = t.data.next_1_hours || null;
+        if (!n1) return;
+        (byDay[day] = byDay[day] || {})[h] = { t: det.air_temperature, ws: det.wind_speed != null ? Math.round(det.wind_speed * 3.6) : null, wd: det.wind_from_direction, cloud: det.cloud_area_fraction, mm: (n1.details || {}).precipitation_amount || 0, sym: (n1.summary || {}).symbol_code || '' };
+      });
+      // keep the hours already past as they were last seen; replace the rest with the newest forecast
+      var nowH = new Date().getHours(), t0 = today();
+      for (var day in byDay) {
+        if (day < t0) continue;
+        var keep = (await kvGet('wxf:' + S.proj.project.id + ':' + day)) || {};
+        var hrs = keep.hours || {};
+        Object.keys(byDay[day]).forEach(function (h) { if (day > t0 || +h >= nowH || !hrs[h]) hrs[h] = byDay[day][h]; });
+        await kvSet('wxf:' + S.proj.project.id + ':' + day, { day: day, source: 'MET Norway', at: new Date().toISOString(), loc: { lat: +(+loc.lat).toFixed(4), lon: +(+loc.lon).toFixed(4) }, hours: hrs });
+      }
+      S.wx.at = Date.now(); await kvSet('wx', S.wx);
+      if (S.view === 'day') renderDay(); else if (S.view === 'days') renderDays();
+    } catch (e) { /* no signal or the service is down: carry on without */ }
+  }
+  function wxRefresh() { if (S.view === 'day') renderDay(); }
+  async function wxForecast(day) { return S.proj ? ((await kvGet('wxf:' + S.proj.project.id + ':' + day)) || null) : null; }
+  // The day's weather, hour by hour: forecast hours (may be none) and the logged lines (from anyone) → one call per hour.
+  function wxDay(fc, logs, extraHours) {
+    var hours = fc && fc.hours || {}, lo = 7, hi = 17;
+    (extraHours || []).forEach(function (h) { lo = Math.min(lo, h); hi = Math.max(hi, h); });
+    logs = (logs || []).filter(function (e) { return e.wx; }).slice().sort(function (a, b) { return a.time < b.time ? -1 : 1; });
+    var hr = function (e) { return new Date(e.time).getHours(); };
+    var wetter = logs.some(function (e) { return e.wx.sky && WET[e.wx.sky] && hours[hr(e)] && !WET[skyOf(hours[hr(e)])]; });
+    var fsky = function (h) { return skyOf(hours[h], wetter && logs.some(function (e) { return e.wx.sky && WET[e.wx.sky] && hr(e) <= h; })); };
+    var out = [], hold = null;
+    for (var h = lo; h <= hi; h++) {
+      var f = hours[h] || null, here = logs.filter(function (e) { return hr(e) === h && e.wx.sky; }), lastHere = here[here.length - 1];
+      if (lastHere) hold = { sky: lastHere.wx.sky, from: h, by: lastHere.by || '', at: lastHere.time, fAt: fsky(h) };
+      if (hold && hold.from < h) {
+        var a = fsky(h), b = fsky(h + 1), gone = false;
+        if (WET[hold.sky]) gone = h >= hold.from + 2 && a === 'fine' && (b === 'fine' || b == null);
+        else { var catA = a ? !!WET[a] : null, catB = b ? !!WET[b] : null, cat0 = hold.fAt ? !!WET[hold.fAt] : null; gone = a != null && cat0 != null && catA !== cat0 && (catB == null || catB === catA); }
+        if (gone) hold = null;
+      }
+      var tl = logs.filter(function (e) { return hr(e) === h && e.wx.temp != null; }).pop(), wl = logs.filter(function (e) { return hr(e) === h && (e.wx.wind != null || e.wx.windy != null); }).pop();
+      var sky = hold ? hold.sky : fsky(h);
+      out.push({ h: h, sky: sky, logged: !!hold, by: hold ? hold.by : '', at: hold ? hold.at : '', mark: !!lastHere,
+        t: tl ? tl.wx.temp : f && f.t != null ? Math.round(f.t) : null, tLogged: !!tl, ws: wl && wl.wx.wind != null ? wl.wx.wind : f ? f.ws : null, wd: f ? f.wd : null, windy: wl ? wl.wx.windy : null, wLogged: !!wl });
+    }
+    return out;
+  }
+  function wxSummary(hrs) {
+    var known = hrs.filter(function (x) { return x.sky; }); if (!known.length) return '';
+    var segs = [];
+    known.forEach(function (x) { var g = segs[segs.length - 1]; if (g && g.sky === x.sky) { g.to = x.h; if (x.logged) g.logged = g.logged || x; } else segs.push({ sky: x.sky, from: x.h, to: x.h, logged: x.logged ? x : null }); });
+    var part = function (g, i) {
+      var name = WXSKY[g.sky], t = g.from === known[0].h && g.to === known[known.length - 1].h ? '' : g.from === known[0].h ? (g.to < 12 ? ' morning' : ' until ' + pad(g.to + 1) + ':00') : g.to === known[known.length - 1].h ? (g.from >= 12 ? (i ? ' after' : ' afternoon') : ' from ' + pad(g.from) + ':00') : ' ' + pad(g.from) + ':00–' + pad(g.to + 1) + ':00';
+      var lg = g.logged && g.logged.at ? ' (' + (g.logged.by ? g.logged.by + ' ' : '') + 'logged ' + hm(g.logged.at) + ')' : '';
+      return (i ? name.toLowerCase() : name) + t + lg;
+    };
+    var ts = hrs.map(function (x) { return x.t; }).filter(function (v) { return v != null; });
+    var ws = hrs.map(function (x) { return x.ws; }).filter(function (v) { return v != null; }), dirs = {}; hrs.forEach(function (x) { var c = compass(x.wd); if (c) dirs[c] = (dirs[c] || 0) + 1; });
+    var dir = Object.keys(dirs).sort(function (a, b) { return dirs[b] - dirs[a]; })[0] || '';
+    var windy = hrs.some(function (x) { return x.windy; });
+    return segs.map(part).join(', ') + (ts.length ? ' · ' + Math.min.apply(null, ts) + (Math.max.apply(null, ts) !== Math.min.apply(null, ts) ? '–' + Math.max.apply(null, ts) : '') + '°' : '') +
+      (ws.length ? ' · ' + (dir ? dir + ' ' : '') + Math.min.apply(null, ws) + (Math.max.apply(null, ws) !== Math.min.apply(null, ws) ? '–' + Math.max.apply(null, ws) : '') + ' km/h' : windy ? ' · windy' : '');
+  }
+  var WXICON = {
+    fine: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#FFD66B" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
+    cloudy: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#C9D0CD" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M7 18h10a4 4 0 0 0 .5-7.97A6 6 0 0 0 6 11a3.5 3.5 0 0 0 1 7z"/></svg>',
+    showers: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#5CB8FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 15h10a4 4 0 0 0 .5-7.97A6 6 0 0 0 6 8a3.5 3.5 0 0 0 1 7z"/><path d="M10 18l-1 2M15 18l-1 2"/></svg>',
+    rain: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#5CB8FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 14h10a4 4 0 0 0 .5-7.97A6 6 0 0 0 6 7a3.5 3.5 0 0 0 1 7z"/><path d="M8 17l-1 3M12 17l-1 3M16 17l-1 3"/></svg>',
+    heavy: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#5CB8FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 13h10a4 4 0 0 0 .5-7.97A6 6 0 0 0 6 6a3.5 3.5 0 0 0 1 7z"/><path d="M13 14l-2 4h3l-2 4"/><path d="M7 16l-1 3M18 16l-1 3"/></svg>' };
+  function wxStrip(hrs, sum) {
+    if (!hrs.some(function (x) { return x.sky; })) return '';
+    var marks = hrs.filter(function (x) { return x.mark; }), lastMark = marks[marks.length - 1];
+    return '<button type="button" class="wx" data-act="wxdetail" aria-label="Weather: ' + esc(sum) + '. Tap for the hour by hour.">' +
+      '<span class="wx-row">' + hrs.map(function (x) { return '<span class="wx-h' + (WET[x.sky] ? ' wet' : '') + (x.logged ? ' lg' : '') + (x.mark ? ' mk' : '') + '">' + (x.sky ? WXICON[x.sky] : '<span class="wx-q">·</span>') + '<small>' + (x.t != null ? x.t + '°' : '') + '</small></span>'; }).join('') + '</span>' +
+      '<span class="wx-ax">' + hrs.map(function (x, i) { return '<span>' + (i % 2 === 0 ? pad(x.h) : '') + '</span>'; }).join('') + '</span>' +
+      '<span class="wx-s">' + (lastMark ? '<span class="wx-by">' + esc((lastMark.by ? lastMark.by + ' ' : '') + 'logged ' + WXSKY[lastMark.sky].toLowerCase() + ' ' + hm(lastMark.at)) + '</span>' : '') + esc(sum) + '</span></button>';
+  }
+  async function wxBlock(d, es) {
+    var fc = await wxForecast(d), logs = es.filter(function (e) { return e.type === 'weather'; }).map(function (e) { return Object.assign({}, e, { by: S.me ? S.me.handle : '' }); });
+    if (!fc && !logs.length) return '';
+    var hs = es.map(function (e) { return new Date(e.time).getHours(); }), hrs = wxDay(fc, logs, hs);
+    S.wxShown = { day: d, hrs: hrs, fc: fc, logs: logs };
+    return wxStrip(hrs, wxSummary(hrs));
+  }
+  function wxDetail() {
+    var w = S.wxShown; if (!w) return;
+    var rows = w.hrs.map(function (x) {
+      return '<div><span class="mono" style="width:44px">' + pad(x.h) + ':00</span><span style="width:22px">' + (x.sky ? WXICON[x.sky] : '') + '</span><span class="lt"><b>' + (x.sky ? WXSKY[x.sky] : '–') + (x.logged ? ' · logged' : ' · guess') + '</b><span>' +
+        [x.t != null ? x.t + '°' + (x.tLogged ? ' (logged)' : '') : '', x.ws != null ? compass(x.wd) + ' ' + x.ws + ' km/h' + (x.wLogged ? ' (logged)' : '') : x.windy ? 'windy (logged)' : '', x.logged && x.at ? (x.by ? x.by + ' ' : '') + 'logged ' + hm(x.at) : ''].filter(Boolean).join(' · ') + '</span></span></div>';
+    }).join('');
+    var logs = w.logs.map(function (e) { return '<button type="button" data-e="' + esc(e.id) + '"><span class="mono" style="width:44px">' + hm(e.time) + '</span><span class="lt"><b>' + esc(e.raw || e.text) + '</b><span>Tap to change or delete</span></span></button>'; }).join('');
+    sheet('<div class="grip"></div><h2>Weather</h2><p>' + esc(wxSummary(w.hrs)) + '</p>' +
+      (logs ? '<div class="sec">Logged on site</div><div class="list">' + logs + '</div>' : '') +
+      '<div class="sec">Hour by hour</div><div class="list wxl">' + rows + '</div>' +
+      '<p class="small">' + (w.fc ? 'Guesses are modelled weather from MET Norway (yr.no), not a reading on site. ' : 'No forecast for this day: only what was logged. ') + 'Type a weather word on its own (rainy, fine, windy) or <b>weather.</b> to log what it’s actually like; it wins for what it says.</p>');
+  }
+  function wxSettings() {
+    var on = wxOn(), loc = siteLoc();
+    sheet('<div class="grip"></div><h2>Weather</h2><p>BTC Walk can fill in each day’s weather from <b>MET Norway</b> (yr.no): free, credited, and allowed for work use. It’s modelled weather for the site, a guess; what you log on site wins.</p>' +
+      '<p>MET Norway keeps the phone’s internet address and the site’s location in its logs. Nothing else about the job is sent. Its terms are a legal agreement for you to read and accept yourself: <a href="https://api.met.no/doc/TermsOfService" target="_blank" rel="noopener">api.met.no/doc/TermsOfService</a></p>' +
+      '<div class="list">' + (on ? '<button type="button" data-act="wxoff"><span class="lt"><b>Weather is on</b><span>Accepted ' + esc(S.wx.acceptedAt ? dayLabel(S.wx.acceptedAt.slice(0, 10)) : '') + '. Tap to turn it off.</span></span></button>'
+        : '<button type="button" data-act="wxon"><span class="lt"><b>I’ve read MET Norway’s terms and accept them</b><span>Turns weather on for this phone</span></span></button>') +
+      '<button type="button" data-act="wxhere"><span class="lt"><b>Site location: ' + (loc ? (+loc.lat).toFixed(3) + ', ' + (+loc.lon).toFixed(3) + ((S.proj.site && S.proj.site.lat != null) ? ' (project file)' : '') : 'not set') + '</b><span>Use where this phone is now (on site)</span></span></button></div>' +
+      '<p class="small">Weather data: MET Norway, CC BY 4.0.</p>');
+  }
+
   // ---------- pull-down stretch (2.0) ----------
   // Pull past the top or the bottom of a list and it stretches, with more resistance the further you go; let go and it
   // springs back. Our own, so it feels the same on iPhone and Android (the lists scroll inside the app, where the phone's
@@ -695,7 +858,7 @@
     H.guard = false; toast('Press back again to leave');
     clearTimeout(H.leaving); H.leaving = setTimeout(function () { if (!H.guard) { history.pushState({ walk: 'guard' }, ''); H.guard = true; } }, 2600);
   });
-  function openDay(d) { S.view = 'day'; S.day = d; S.find = ''; S.findOpen = false; S.edit = null; S.as = null; render(); }
+  function openDay(d) { wxFetch(); S.view = 'day'; S.day = d; S.find = ''; S.findOpen = false; S.edit = null; S.as = null; render(); }
 
   document.addEventListener('click', async function (ev) {
     var t = ev.target.closest('button, [data-day], [data-e], [data-jump], [data-put], [data-line], [data-me], [data-filter], [data-fix]');
@@ -711,6 +874,7 @@
     if (t.dataset.line) { var bl = $('box'), vl = bl.value, pl2 = bl.selectionStart || vl.length, head2 = vl.slice(0, pl2).replace(/\d[\d.]*$/, ''); bl.value = head2 + t.dataset.line + ' ' + vl.slice(pl2); var np2 = head2.length + t.dataset.line.length + 1; bl.focus(); bl.setSelectionRange(np2, np2); S.draft = bl.value; reads(); return; }
     if (t.dataset.e) {
       var e = S.entries.filter(function (x) { return x.id === t.dataset.e; })[0]; if (!e) return;
+      if (sheetOpen()) { hideSheet(); if (S.view !== 'day' || S.day !== e.day) openDay(e.day); }
       if (S.find) { S.find = ''; S.findOpen = false; renderDay(); var el = document.querySelector('[data-e="' + e.id + '"]'); if (el) { el.scrollIntoView({ block: 'center' }); el.classList.add('sel'); setTimeout(function () { el.classList.remove('sel'); }, 1400); } return; }
       S.edit = e.id; S.photos = pics(e).slice(); S.as = e.type; renderDay(); var bx = $('box'); bx.focus(); return;
     }
@@ -731,6 +895,15 @@
     else if (act === 'undo') { var u = toastUndo; toastUndo = null; $('toast').hidden = true; if (u) { await u.fn(); toast('Undone'); } }
     else if (act === 'closesheet') closeSheet();
     else if (act === 'clearold') clearOld();
+    else if (act === 'wxdetail') wxDetail();
+    else if (act === 'wxset') wxSettings();
+    else if (act === 'wxon') { S.wx = Object.assign(S.wx || {}, { on: true, acceptedAt: new Date().toISOString() }); await kvSet('wx', S.wx); wxSettings(); if (!siteLoc()) toast('Now set the site location: tap “Use where this phone is now” on site.'); else wxFetch(true); }
+    else if (act === 'wxoff') { S.wx.on = false; await kvSet('wx', S.wx); wxSettings(); }
+    else if (act === 'wxhere') {
+      if (!navigator.geolocation) { toast('This phone can’t share its location here.', true); return; }
+      navigator.geolocation.getCurrentPosition(async function (pos) { S.wx = Object.assign(S.wx || {}, { loc: { lat: +pos.coords.latitude.toFixed(4), lon: +pos.coords.longitude.toFixed(4) }, at: 0 }); await kvSet('wx', S.wx); wxSettings(); toast('Site location set.'); wxFetch(true); },
+        function () { toast('No location: allow it for BTC Walk in the phone’s settings, then try again.', true); }, { enableHighAccuracy: false, timeout: 15000 });
+    }
     else if (act === 'update') doUpdate();
     else if (act === 'checkupd') { closeSheet(); checkUpdate(true); }
     else if (act === 'earlier') { S.showEarlier = true; renderDays(); }
@@ -802,7 +975,7 @@
     } catch (e) { /* reload anyway */ }
     location.reload();
   }
-  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') checkUpdate(); });
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') { checkUpdate(); wxFetch(); } });
   setInterval(function () { if (document.visibilityState === 'visible') checkUpdate(); }, 600000);
 
   // ---------- start ----------
@@ -813,9 +986,10 @@
     if (!p) { H.ready = true; history.replaceState({ walk: 'root' }, ''); await useDemo(); checkUpdate(); return; }
     S.proj = p; S.entries = await allEntries(p.project.id);
     S.me = (await kvGet('me:' + p.project.id)) || null; S.loc = (await kvGet('loc')) || null; S.lastLine = (await kvGet('lastLine:' + p.project.id)) || null; S.gone = (await kvGet('gone:' + p.project.id)) || [];
+    S.wx = (await kvGet('wx')) || {};
     H.ready = true; history.replaceState({ walk: 'root' }, ''); render();
     if (!S.me && !p.demo) pickMe();
-    checkUpdate();
+    checkUpdate(); wxFetch();
   })();
   // Swipe back on iPhone (1.2). A Home Screen app on iPhone has no swipe-back of its own, so BTC Walk does it: start at
   // the left edge and drag right, the same steps as Back on Android. Only in the Home Screen app on iPhone (in Safari,

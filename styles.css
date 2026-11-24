@@ -111,6 +111,10 @@ main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .e.flowon { border-color: var(--flow-line); } .e.flowon::before { background: var(--flow); }
 .e.action { border-color: var(--act-line); } .e.action::before { background: var(--act); }
 .e.itp { border-color: var(--itp-line); } .e.itp::before { background: var(--itp); }
+.e.delay { border-color: rgba(255,107,96,.3); } .e.delay::before { background: #FF6B60; } .delay .e-k { color: #FF8C83; }
+.e.instruction { border-color: rgba(245,215,110,.3); } .e.instruction::before { background: #F5D76E; } .instruction .e-k { color: #F5D76E; }
+.e.crew::before, .e.visitor::before { background: #5F6764; }
+.as.delay { background: #FF6B60; } .as.instruction { background: #F5D76E; } .as.crew, .as.visitor, .as.weather { background: var(--panel3); color: var(--ink); }
 .e.sel { outline: 2px solid var(--lime); outline-offset: 2px; }
 .e-h { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 11px; color: var(--muted); }
 .e-h > span:last-child { font-family: var(--mono); font-size: 12px; font-weight: 600; }
@@ -304,3 +308,19 @@ main.in-back { animation: in-back .24s var(--ease); }
   .recap, .stat, .allclear { background: #fff !important; border-color: #ccc !important; color: #111; }
   .bars .b { background: #bbb !important; } .bars .b.top { background: #004972 !important; }
 }
+
+/* the day's weather (2.1): an icon and temperature per hour, wet hours tinted, logged hours outlined lime */
+.wx { display: block; width: 100%; margin-top: 14px; padding: 10px 10px 8px; border-radius: 16px; border: 1px solid var(--line); background: #0B0D0E; text-align: left; color: var(--ink); }
+.wx-row, .wx-ax { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 3px; }
+.wx-h { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 0 4px; border-radius: 8px; background: var(--panel2); }
+.wx-h small { font-size: 10.5px; color: var(--ink2); font-family: var(--mono); }
+.wx-h.wet { background: #122033; }
+.wx-h.lg { box-shadow: inset 0 0 0 1.5px rgba(212,255,58,.55); }
+.wx-h.mk::after { content: ''; position: absolute; top: -4px; right: -2px; width: 8px; height: 8px; border-radius: 50%; background: var(--lime); }
+.wx-q { color: var(--faint); font-size: 14px; line-height: 18px; }
+.wx-ax { margin-top: 3px; font-size: 10.5px; color: var(--muted); text-align: center; font-family: var(--mono); }
+.wx-s { display: block; margin-top: 8px; font-size: 13px; color: var(--ink2); line-height: 1.45; }
+.wx-by { display: block; color: var(--lime); font-size: 12px; margin-bottom: 2px; }
+.wxl > div { min-height: 48px; }
+.list .mono { flex: none; width: 50px; font-size: 13px; }
+.sheet a { color: var(--lime); }

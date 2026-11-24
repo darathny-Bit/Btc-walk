@@ -45,6 +45,14 @@ The look and feel are in [DESIGN.md](DESIGN.md). What 2.0 adds:
 - **Pull-down stretch** on every list; a light buzz on Android for send, photos and ship.
 - **Free up space** (⋮): clear shipped lines older than a month; they're safe in BTC.
 
+## Weather and site lines (2.1)
+
+- **Weather** (⋮ › Weather) is off until someone reads and accepts [MET Norway's terms](https://api.met.no/doc/TermsOfService) on the phone. Then the forecast for the site (the project file's `site: { lat, lon }`, or this phone's location once) fills each hour 07:00–17:00 with an icon and temperature. It's modelled weather, a guess, credited to MET Norway (CC BY 4.0). MET Norway logs the phone's internet address and the site's location; nothing else about the job is sent.
+- **Log what it's actually like:** a weather word on its own (`rainy`, `fine, windy`, `showers`) or `weather. 8 degrees, gusty`. It wins for what it says (sky, temperature, wind) and the rest stays the guess. A logged sky holds until the forecast clearly moves on (wet: two dry, clearing hours in a row; dry: two hours of the forecast changing its mind) or someone logs again; logged rain the forecast missed makes the rest of that day lean wetter. Weather lines stay out of the day's list: the strip shows them, with "SR logged rain 13:05"; tap it for the hour by hour.
+- **Site lines:** `delay. waiting on the crane 2h` (time lost), `instruction. hold the pour @SR` (who gave it), `crew. HEB 6, sparkies 4` (who's on site), `visitor. council inspector`.
+- **Amended:** a line changed after it was shipped keeps what it said before (`was`, `amendedAt`), and BTC prints both.
+- **Ship file:** `weather: { "<day>": { source, at, loc, hours: { "<h>": { t, ws, wd, cloud, mm, sym } } } }` with the forecast; entries add `wx`, `crew`, `lost`, `was`, `wasType`, `amendedAt`.
+
 ## The two files
 BTC Walk only talks to BTC through two files.
 
