@@ -6,7 +6,7 @@
    (⋮ › Load project). No server, nothing sent anywhere else. */
 'use strict';
 (function () {
-  var VERSION = '1.8';
+  var VERSION = '1.9';
   var FORMAT = 'btcwalk', PFORMAT = 'btcproject';
 
   // ---------- the demo job (generic) ----------
@@ -45,7 +45,7 @@
   var allEntries = function (proj) { return tx('entries', 'readonly', function (s) { return s.index('proj').getAll(proj); }); };
 
   // ---------- state ----------
-  var S = { proj: null, me: null, entries: [], view: 'days', day: null, find: '', findAll: '', filter: 'all', edit: null, photo: null, as: null, loc: null };
+  var S = { proj: null, me: null, entries: [], view: 'days', day: null, find: '', findAll: '', filter: 'all', edit: null, photos: [], as: null, loc: null };
   var $ = function (id) { return document.getElementById(id); };
   var main = $('main');
   function esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
@@ -160,7 +160,7 @@
       return { day: d, entries: es, unshipped: changed || es.some(function (e) { return !e.shipped; }), changed: changed, gone: gone[d] || 0 };
     });
   }
-  function counts(es) { var c = { note: 0, flowon: 0, action: 0, itp: 0, photo: 0 }; es.forEach(function (e) { c[e.type] = (c[e.type] || 0) + 1; if (e.photo) c.photo++; }); return c; }
+  function counts(es) { var c = { note: 0, flowon: 0, action: 0, itp: 0, photo: 0 }; es.forEach(function (e) { c[e.type] = (c[e.type] || 0) + 1; c.photo += pics(e).length; }); return c; }
   function dotsRow(c) { return '<span class="dots-row"><span><span class="dot-n">●</span> ' + c.note + '</span><span><span class="dot-f">●</span> ' + c.flowon + '</span><span><span class="dot-a">●</span> ' + c.action + '</span>' + (c.itp ? '<span><span class="dot-i">●</span> ' + c.itp + '</span>' : '') + (c.photo ? '<span class="muted">▣ ' + c.photo + '</span>' : '') + '</span>'; }
   var RESHIP = '<span class="flag">✎ CHANGED · RESHIP</span>';
   var FLAG = '<span class="flag"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1F1A10" stroke-width="2.6" aria-hidden="true"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg>NOT SHIPPED</span>';
@@ -189,6 +189,10 @@
   }
 
   // ---------- a day's chat ----------
+  // Several photos on a line (1.9): e.photos; older lines have one e.photo.
+  function pics(e) { return e && e.photos && e.photos.length ? e.photos : e && e.photo ? [e.photo] : []; }
+  var MAXPICS = 10;
+  function picsHtml(ps) { return ps.length ? '<span class="e-ph n' + Math.min(ps.length, 3) + '">' + ps.map(function (p, i) { return '<img src="' + p + '" alt="Photo ' + (i + 1) + '">'; }).join('') + '</span>' : ''; }
   function whoTxt(w) { return String(w || '').split(/\s+/).filter(Boolean).map(function (h) { return '@' + h; }).join(' '); }
   function itpHead(e) { return 'ITP · ' + (e.itp && e.line ? esc(e.itp) + ' ' + esc(e.line) : 'TO SORT ON THE PC'); }
   function entryHtml(e, hl) {
@@ -200,7 +204,7 @@
     var ed = S.edit === e.id;
     return '<button type="button" class="e ' + e.type + (ed ? ' ed' : '') + (S.fresh === e.id ? ' new' : '') + '" data-e="' + esc(e.id) + '"><span class="e-h"><span class="e-k">' + (ed ? PEN : '') + head + '</span><span>' + hm(e.time) + (e.shipped ? ' ✓' : '') + '</span></span>' +
       (e.text ? '<span class="e-t">' + mark(e.text) + '</span>' : '') + (e.type === 'flowon' ? (e.action ? '<span class="e-a">→ ' + mark(e.action) + '</span>' : '<span class="e-none">⚠ No action yet · tap to add</span>') : '') +
-      (meta ? '<span class="e-m">' + meta + '</span>' : '') + (e.photo ? '<img src="' + e.photo + '" alt="Photo">' : '') + '</button>';
+      (meta ? '<span class="e-m">' + meta + '</span>' : '') + picsHtml(pics(e)) + '</button>';
   }
   var PEN = '<svg class="pen" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg>';
   var BIN = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg>';
@@ -226,8 +230,8 @@
       '<div class="chat" id="chat">' + (q && shown.length < es.length ? '<span class="note-c">' + (es.length - shown.length) + ' lines hidden · tap one to see it in the chat</span>' : '') +
       (shown.length ? shown.map(function (e) { return entryHtml(e, q); }).join('') : '<div class="empty">' + (q ? 'Nothing matches.' : 'Type below: a note, a photo, a clash (<b>what changed ; what next</b>) or an action (<b>@person</b>, <b>P1</b>, <b>fri</b>). <b>at SBR 1</b> says where you are.') + '</div>') + '</div>' +
       (loc ? '<div class="loc"><span class="l">AT</span><b>' + esc(loc) + '</b><button type="button" data-act="unloc" aria-label="Clear where you are">×</button></div>' : '') +
-      '<div class="comp"><div class="reads" id="reads"></div><div class="sug" id="sug"></div>' + (S.photo ? '<span class="thumb"><img src="' + S.photo + '" alt="Photo to send">Photo goes with the next line<button type="button" data-act="nophoto" aria-label="Remove the photo">×</button></span>' : '') +
-      (S.edit ? pinHtml() : '') + '<div class="comp-row"><button type="button" class="cam" data-act="photo" aria-label="Add a photo"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="6" width="18" height="14" rx="2"/><circle cx="12" cy="13" r="3.5"/><path d="M9 6l1.5-2h3L15 6"/></svg></button>' +
+      '<div class="comp"><div class="reads" id="reads"></div><div class="sug" id="sug"></div>' + (S.photos.length ? '<div class="thumbs">' + S.photos.map(function (p, i) { return '<span class="thumb"><img src="' + p + '" alt="Photo ' + (i + 1) + '"><button type="button" data-act="nophoto" data-i="' + i + '" aria-label="Remove photo ' + (i + 1) + '">×</button></span>'; }).join('') + '<span class="thumbs-t">' + S.photos.length + ' photo' + (S.photos.length === 1 ? '' : 's') + (S.edit ? ' on this line' : ' go with the next line') + '</span></div>' : '') +
+      (S.edit ? pinHtml() : '') + '<div class="comp-row"><button type="button" class="cam" data-act="photo" aria-label="Add a photo"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="6" width="18" height="14" rx="2"/><circle cx="12" cy="13" r="3.5"/><path d="M9 6l1.5-2h3L15 6"/></svg></button><button type="button" class="cam" data-act="pics" aria-label="Add photos from the phone"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-8 8"/></svg></button>' +
       '<textarea id="box" rows="1" placeholder="Note, clash (;) or @action…" aria-label="Write a line" enterkeyhint="send"></textarea><button type="button" class="send" id="send" data-act="send">' + (S.edit ? 'Save' : 'Send') + '</button></div></div>';
     var box = $('box');
     if (S.edit) { var ed = S.entries.filter(function (e) { return e.id === S.edit; })[0]; if (ed) box.value = ed.raw || ''; }
@@ -259,7 +263,7 @@
       if (list.length === 1 && k && (key(list[0].put) === k || key(list[0].label) === k)) list = [];   // already typed in full
       sg.innerHTML = list.map(function (x) { return '<button type="button" data-put="' + esc(x.put) + '">' + esc(x.label) + '<small>' + esc(x.sub) + '</small></button>'; }).join('');
     } else sg.innerHTML = '';
-    if (!v.trim() && !S.photo) { r.innerHTML = ''; return; }
+    if (!v.trim() && !S.photos.length) { r.innerHTML = ''; return; }
     if (p.move) { r.innerHTML = 'Moves you to <span class="chip">' + esc(p.move.name) + '</span>'; return; }
     var type = S.as || p.type;
     var where = p.itp ? (p.area ? p.area + ' · ' : '') + p.itp : p.area || p.tag || '';
@@ -281,21 +285,21 @@
   }
   async function send() {
     var b = $('box'); if (!b) return;
-    var raw = b.value.trim(); if (!raw && !S.photo) return;
+    var raw = b.value.trim(); if (!raw && !S.photos.length && !S.edit) return;
     var p = parse(raw, S.day);
     if (p.move) { S.loc = p.move; await kvSet('loc', S.loc); S.draft = ''; b.value = ''; toast('At ' + p.move.name); renderDay(); return; }
     var type = S.as || p.type, now = new Date().toISOString();
     var where = p.there ? {} : S.loc ? { area: S.loc.area || '', itp: S.loc.itp || '', tag: S.loc.tag || '' } : {};
     if (S.edit) {
       var e = S.entries.filter(function (x) { return x.id === S.edit; })[0];
-      if (e) { Object.assign(e, { raw: raw, type: type, line: p.line, text: p.text || (e.photo ? 'Photo' : ''), action: p.action, who: p.who, priority: p.priority, due: p.due, notFound: p.notFound, edited: true, shipped: false, there: !!p.there }, p.there ? { area: p.area, itp: p.itp, tag: p.tag } : {}); if (S.photo) e.photo = S.photo; await putEntry(e); }
-      S.edit = null; S.photo = null; S.as = null; renderDay(); toast('Saved'); return;
+      if (e) { Object.assign(e, { raw: raw, type: type, line: p.line, text: p.text || '', action: p.action, who: p.who, priority: p.priority, due: p.due, notFound: p.notFound, edited: true, shipped: false, there: !!p.there }, p.there ? { area: p.area, itp: p.itp, tag: p.tag } : {}); e.photos = S.photos.slice(); delete e.photo; await putEntry(e); }
+      S.edit = null; S.photos = []; S.as = null; renderDay(); toast('Saved'); return;
     }
     if (type === 'itp' && p.itp && p.line) { S.lastLine = { itp: p.itp, line: p.line }; kvSet('lastLine:' + S.proj.project.id, S.lastLine); }
-    var en = { id: uid(), proj: S.proj.project.id, day: S.day, time: now, raw: raw, type: type, line: p.line, text: p.text || (S.photo ? 'Photo' : ''), action: p.action, who: p.who, area: p.there ? p.area : where.area || '', itp: p.there ? p.itp : where.itp || '', tag: p.there ? p.tag : where.tag || '',
-      location: S.loc ? S.loc.name : '', priority: p.priority, due: p.due, photo: S.photo || '', edited: false, shipped: false, notFound: p.notFound, there: !!p.there };
+    var en = { id: uid(), proj: S.proj.project.id, day: S.day, time: now, raw: raw, type: type, line: p.line, text: p.text || '', action: p.action, who: p.who, area: p.there ? p.area : where.area || '', itp: p.there ? p.itp : where.itp || '', tag: p.there ? p.tag : where.tag || '',
+      location: S.loc ? S.loc.name : '', priority: p.priority, due: p.due, photos: S.photos.slice(), edited: false, shipped: false, notFound: p.notFound, there: !!p.there };
     S.entries.push(en); await putEntry(en);
-    S.draft = ''; S.photo = null; S.as = null; S.fresh = en.id; buzz(8); renderDay(); S.fresh = null;
+    S.draft = ''; S.photos = []; S.as = null; S.fresh = en.id; buzz(8); renderDay(); S.fresh = null;
   }
 
   // ---------- photos: shrunk on the phone (~200 KB) ----------
@@ -329,7 +333,7 @@
           var dot = e.type === 'flowon' ? 'dot-f' : e.type === 'action' ? 'dot-a' : e.type === 'itp' ? 'dot-i' : 'dot-n', hlq = q && q.charAt(0) !== '@' ? q : '';
           var mk = function (s) { s = esc(s); if (!hlq) return s; return s.replace(new RegExp('(' + esc(hlq.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) + ')', 'ig'), '<mark>$1</mark>'); };
           var where = e.itp ? (e.area ? e.area + ' · ' : '') + e.itp : e.area || e.tag || '';
-          return '<button type="button" class="res" data-jump="' + esc(e.id) + '"><span class="tm">' + hm(e.time) + '</span><span style="display:flex;flex-direction:column;gap:3px"><span style="font-size:15px"><span class="' + dot + '">●</span> ' + mk(e.text) + (e.action ? ' <b>→ ' + mk(e.action) + '</b>' : '') + (e.who ? ' @' + esc(e.who) : '') + '</span>' + (where || e.photo ? '<span class="e-m">' + esc(where) + (e.photo ? (where ? ' · ' : '') + '▣ photo' : '') + '</span>' : '') + '</span></button>';
+          return '<button type="button" class="res" data-jump="' + esc(e.id) + '"><span class="tm">' + hm(e.time) + '</span><span style="display:flex;flex-direction:column;gap:3px"><span style="font-size:15px"><span class="' + dot + '">●</span> ' + mk(e.text) + (e.action ? ' <b>→ ' + mk(e.action) + '</b>' : '') + (e.who ? ' @' + esc(e.who) : '') + '</span>' + (where || pics(e).length ? '<span class="e-m">' + esc(where) + (pics(e).length ? (where ? ' · ' : '') + '▣ ' + pics(e).length + ' photo' + (pics(e).length === 1 ? '' : 's') : '') + '</span>' : '') + '</span></button>';
         }).join('');
       }).join('') + (!days.length ? '<div class="empty">' + (q ? 'Nothing matches “' + esc(S.findAll) + '”.' : 'Type to search every day. <b>clashes</b>, <b>actions</b> or <b>@NH</b> work too.') + '</div>' : '') + '</div></div>';
     sync();
@@ -367,7 +371,7 @@
     var es = [], pickDays = {}; pick.forEach(function (d) { es = es.concat(d.entries); pickDays[d.day] = true; });
     var gone = (S.gone || []).filter(function (g) { return pickDays[g.day]; });
     var body = { format: FORMAT, v: 1, project: { id: S.proj.project.id, code: S.proj.project.code, name: S.proj.project.name }, shippedBy: { name: S.me ? S.me.name : '', handle: S.me ? S.me.handle : '' }, shippedAt: new Date().toISOString(), app: 'BTC Walk ' + VERSION,
-      walks: [], entries: es.map(function (e) { return { id: e.id, day: e.day, time: e.time, type: e.type, raw: e.raw, text: e.text, action: e.action, who: e.who, area: e.area, itp: e.itp, line: e.line || '', tag: e.tag, location: e.location, priority: e.priority, due: e.due, photo: e.photo, edited: e.edited }; }), removed: gone.map(function (g) { return { id: g.id, day: g.day }; }), closures: [] };
+      walks: [], entries: es.map(function (e) { return { id: e.id, day: e.day, time: e.time, type: e.type, raw: e.raw, text: e.text, action: e.action, who: e.who, area: e.area, itp: e.itp, line: e.line || '', tag: e.tag, location: e.location, priority: e.priority, due: e.due, photos: pics(e), photo: pics(e)[0] || '', edited: e.edited }; }), removed: gone.map(function (g) { return { id: g.id, day: g.day }; }), closures: [] };
     // .btcwalk.txt as plain text (1.4.1): Android's share sheet refuses file types it doesn't know ("Permission denied"),
     // and plain text is one it always takes. BTC reads .btcwalk and .btcwalk.txt alike.
     var name = fileName(pick), file = new File([JSON.stringify(body)], name, { type: 'text/plain' });
@@ -507,7 +511,7 @@
     if (t.dataset.e) {
       var e = S.entries.filter(function (x) { return x.id === t.dataset.e; })[0]; if (!e) return;
       if (S.find) { S.find = ''; S.findOpen = false; renderDay(); var el = document.querySelector('[data-e="' + e.id + '"]'); if (el) { el.scrollIntoView({ block: 'center' }); el.classList.add('sel'); setTimeout(function () { el.classList.remove('sel'); }, 1400); } return; }
-      S.edit = e.id; S.photo = null; S.as = e.type; renderDay(); var bx = $('box'); bx.focus(); return;
+      S.edit = e.id; S.photos = pics(e).slice(); S.as = e.type; renderDay(); var bx = $('box'); bx.focus(); return;
     }
     if (t.dataset.jump) { var j = S.entries.filter(function (x) { return x.id === t.dataset.jump; })[0]; if (!j) return; openDay(j.day); var el2 = document.querySelector('[data-e="' + j.id + '"]'); if (el2) { el2.scrollIntoView({ block: 'center' }); el2.classList.add('sel'); setTimeout(function () { el2.classList.remove('sel'); }, 1400); } return; }
     if (t.dataset.me) { var pp = (S.proj.people || []).filter(function (x) { return x.handle === t.dataset.me; })[0]; S.me = { name: pp.name, handle: pp.handle }; await kvSet('me:' + S.proj.project.id, S.me); closeSheet(); toast('You’re ' + pp.name + '.'); render(); return; }
@@ -521,13 +525,14 @@
     else if (act === 'ship') shipSheet();
     else if (act === 'doship') doShip();
     else if (act === 'send') send();
-    else if (act === 'photo') $('photo-in').click();
-    else if (act === 'nophoto') { S.photo = null; renderDay(); }
+    else if (act === 'photo') $('photo-in').click();   // the camera, straight away
+    else if (act === 'pics') $('pics-in').click();     // several from the phone's photos (1.9)
+    else if (act === 'nophoto') { S.photos.splice(+t.dataset.i || 0, 1); renderDay(); }
     else if (act === 'findday') { S.findOpen = !S.findOpen; if (!S.findOpen) S.find = ''; renderDay(); var fd = $('find-day'); if (fd) fd.focus(); }
     else if (act === 'as') { var cur = $('box') ? (S.as || parse($('box').value, S.day).type) : 'note'; S.as = CYCLE[(CYCLE.indexOf(cur) + 1) % CYCLE.length]; reads(); }
     else if (act === 'lastline') { var bx2 = $('box'); bx2.value = bx2.value.replace(/\s*$/, '') + ' @' + S.lastLine.itp + ' ' + S.lastLine.line; S.draft = bx2.value; bx2.focus(); reads(); }
     else if (act === 'unloc') { S.loc = null; await kvSet('loc', null); renderDay(); }
-    else if (act === 'cancel') { S.edit = null; S.as = null; renderDay(); }
+    else if (act === 'cancel') { S.edit = null; S.as = null; S.photos = []; renderDay(); }
     else if (act === 'delete') { var dl = S.edit; if (!confirm('Delete this line?')) return; var gel = document.querySelector('[data-e="' + dl + '"]'); if (gel && MOTION) { gel.style.height = gel.offsetHeight + 'px'; void gel.offsetWidth; gel.classList.add('gone'); await new Promise(function (r) { setTimeout(r, 200); }); } var dx = S.entries.filter(function (x) { return x.id === dl; })[0]; S.entries = S.entries.filter(function (x) { return x.id !== dl; }); await delEntry(dl);
       if (dx && dx.shippedAt) { S.gone = (S.gone || []).concat([{ id: dl, day: dx.day }]); await kvSet('gone:' + S.proj.project.id, S.gone); }   // shipped already: BTC takes it out next ship
       S.edit = null; renderDay(); toast(dx && dx.shippedAt ? 'Deleted. Ship again to take it out of BTC.' : 'Deleted'); }
@@ -536,11 +541,22 @@
     else if (act === 'demo') useDemo();
   });
   $('sheet').addEventListener('click', function (ev) { if (ev.target.id === 'sheet') closeSheet(); });
-  $('photo-in').addEventListener('change', async function () {
-    var f = this.files && this.files[0]; this.value = ''; if (!f) return;
-    try { S.photo = await shrink(f); renderDay(); var b = $('box'); if (b) b.focus(); } catch (e) { toast('Could not use that photo.', true); }
-  });
+  async function addPics() {
+    var fs = Array.prototype.slice.call(this.files || []); this.value = ''; if (!fs.length) return;
+    var room = MAXPICS - S.photos.length, bad = 0, keep = S.edit ? null : ($('box') || {}).value;
+    if (fs.length > room) toast('Up to ' + MAXPICS + ' photos on a line; the first ' + Math.max(room, 0) + ' are in.', true);
+    for (var i = 0; i < Math.min(fs.length, room); i++) { try { S.photos.push(await shrink(fs[i])); } catch (e) { bad++; } }
+    if (keep != null) S.draft = keep;
+    renderDay(); var b = $('box'); if (b) b.focus();
+    if (bad) toast(bad === 1 ? 'Could not use one of those photos.' : 'Could not use ' + bad + ' of those photos.', true);
+  }
+  $('photo-in').addEventListener('change', addPics);
+  $('pics-in').addEventListener('change', addPics);
   $('proj-in').addEventListener('change', function () { var f = this.files && this.files[0]; this.value = ''; if (f) loadProjectFile(f); });
+
+  // Keyboard down: iPhone can leave the page scrolled up under the status bar; put it back (1.9).
+  document.addEventListener('focusout', function () { setTimeout(function () { var a = document.activeElement; if (!a || !/^(TEXTAREA|INPUT)$/.test(a.tagName)) { if (window.scrollY || document.documentElement.scrollTop) window.scrollTo(0, 0); } }, 120); });
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', function () { if (window.visualViewport.height >= window.innerHeight - 1 && window.scrollY) window.scrollTo(0, 0); });
 
   // ---------- start ----------
   (async function start() {

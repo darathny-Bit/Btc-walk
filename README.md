@@ -23,11 +23,11 @@ It opens on a made-up demo job. Load your job with ⋮ › **Load project…** a
 | `flange gasket weeping @ITP-06` | tagged to that place, not where you are |
 | `walk the decanter @AK @SR` or `toolbox talk @all` | an **action** for both (or everyone): one card in BTC, each closes their own part |
 | `at SBR 1` | moves you there (no line logged) |
-| `bolts torqued @ITP-06 3.2` (with a photo) | **ITP** evidence for that line: BTC files the photo on ITP-06 line 3.2 by itself. After `@ITP-06` and a space the ITP's lines are offered |
+| `bolts torqued @ITP-06 3.2` (with a photo) | **ITP** evidence for that line: BTC files its photos on ITP-06 line 3.2 by itself. After `@ITP-06` and a space the ITP's lines are offered |
 | `ITP. grout done` or `@ITP grout done` | **ITP** evidence you'll put on its line on the PC (Build's Sort page) |
 | `note.` `action.` `clash.` `ITP.` at the start | says what the line is (the word is dropped); `@clash` is the same as `clash.` (`flow.` and `@flow-on` still work) |
 
-Tap **LOG AS** to change the type before sending (note, clash, action, ITP). With ITP and no line, the last line you used is a one-tap chip. Tap a line to edit or delete it. The camera button adds a photo to the next line (shrunk on the phone to about 200 KB).
+Tap **LOG AS** to change the type before sending (note, clash, action, ITP). With ITP and no line, the last line you used is a one-tap chip. Tap a line to edit or delete it. The camera button takes a photo straight away; the photos button beside it picks several from the phone. Up to 10 photos go with the next line (each shrunk on the phone to about 200 KB): one description, several photos, for example 5 photos of `bolts torqued @ITP-06 3.2`. Take or pick more and they add on; × takes one off. Tap a line to edit it: its photos come back above the box to add to or take off.
 
 Due dates: `today`, `tomorrow`/`tmrw`, `fri`/`by Friday`/`on Fri`, `next Friday`, `eow`, `next week`, `in 3 days`, `28-11` or `28/11`. Saturday and Sunday need the full name.
 
@@ -47,7 +47,7 @@ BTC Walk only talks to BTC through two files.
 ```
 { "format": "btcwalk", "v": 1, "project": { "id", "code", "name" }, "shippedBy": { "name", "handle" }, "shippedAt",
   "entries": [{ "id", "day", "time", "type": "note|flowon|action|itp", "raw", "text", "action", "who", "area", "itp", "line", "tag",
-                "location", "priority", "due", "photo" (data URL), "edited" }],
+                "location", "priority", "due", "photos" ([data URL, …], 1.9), "photo" (the first, for BTC before 2.24), "edited" }],
   "walks": [], "closures": [] }
 ```
 

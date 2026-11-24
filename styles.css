@@ -78,7 +78,13 @@ main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .e-m { font-size: 12px; color: var(--muted); }
 .e-m .nf { color: var(--bad); }
 .e-m .there { color: var(--flow-ink); }
-.e img { max-width: 100%; max-height: 220px; border-radius: 3px; align-self: flex-start; }
+.e-ph { display: grid; gap: 4px; align-self: stretch; }
+.e-ph.n1 { grid-template-columns: minmax(0, 1fr); justify-items: start; }
+.e-ph.n1 img { max-width: 100%; max-height: 220px; }
+.e-ph.n2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.e-ph.n3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.e-ph img { width: 100%; border-radius: 3px; object-fit: cover; }
+.e-ph.n2 img, .e-ph.n3 img { aspect-ratio: 1; }
 mark { background: var(--flow-line); color: #FFE2A8; border-radius: 2px; padding: 0 2px; }
 .note-c { align-self: center; font-family: var(--mono); font-size: 11px; color: var(--muted); }
 
@@ -103,9 +109,12 @@ mark { background: var(--flow-line); color: #FFE2A8; border-radius: 2px; padding
 .chip { display: inline-flex; align-items: center; min-height: 24px; padding: 0 8px; border-radius: 12px; border: 1px solid var(--line); font-size: 12px; color: var(--ink); }
 .chip.warn { border-color: var(--flow-line); color: var(--flow-ink); }
 .chip.nf { border-color: #5C2320; color: var(--bad); }
-.thumb { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+.thumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; padding: 8px 0 4px; }
+.thumbs-t { font-size: 12px; color: var(--muted); }
+.thumb { position: relative; display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
 .thumb img { width: 44px; height: 44px; object-fit: cover; border-radius: 3px; }
-.thumb button { border: 0; background: transparent; color: var(--muted); font-size: 18px; width: 32px; height: 32px; }
+.thumb button { position: absolute; top: -8px; right: -8px; border: 0; border-radius: 50%; background: var(--panel2); color: var(--ink); font-size: 16px; line-height: 1; width: 26px; height: 26px; padding: 0; box-shadow: 0 0 0 2px var(--bg); }
+.thumb button::before { content: ''; position: absolute; inset: -9px; }
 .sug { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; }
 .sug button { flex: none; min-height: 34px; padding: 0 10px; border-radius: 3px; border: 1px solid var(--line); background: var(--panel2); font-size: 13px; color: var(--ink); white-space: nowrap; }
 .sug small { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-left: 4px; }
