@@ -61,6 +61,9 @@ The look and feel are in [DESIGN.md](DESIGN.md). What 2.0 adds:
 ## Straight to BTC (2.10)
 With the key and team password set (⋮ › Your actions; the key needs **Contents: read and write** on btc-drop), every ship is locked on the phone with the team password (the same lock as packs) and put in btc-drop at `inbox/<job hash>/<ship file name>.lock` (`dropSend`). The sheet says **Sent straight to BTC**; nothing to email. BTC's Actions checks that inbox every couple of minutes, files each day as it would from the BTC Inbox (a copy to `Processed/`) and deletes it from btc-drop. No key, no signal or GitHub saying no: it falls back to share / email, with the reason in a toast.
 
+## iPhone: the bar at the bottom (2.16)
+iOS 27 lays a frozen glass blur over the top of home-screen web apps. On an iPhone or iPad (the `ios` class on `<html>`) the bar with the job, search and ⋮ sits at the bottom under Start day / Close Day, and the top holds only the greeting. Android and the PC keep the bar on top. Take the class away when Apple fixes it.
+
 ## @all-m&e (2.15)
 `@all` is everyone in the job; `@all-m&e`, `@all-structures`, `@all-civil` (any team's name, letters and digits only) is everyone in that team. The project file carries the job's `teams: [{ id, name }]`; the line goes as `who: 'all-<team id>'` and BTC expands it. The @ list offers each team.
 

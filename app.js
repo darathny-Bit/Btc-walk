@@ -6,7 +6,10 @@
    (⋮ › Load project). No server, nothing sent anywhere else. */
 'use strict';
 (function () {
-  var VERSION = '2.15.2';
+  var VERSION = '2.16';
+  // iPhone (2.16): iOS 27 lays a frozen glass blur over the top of home-screen web apps, so on an iPhone or iPad the bar
+  // (job, search, ⋮) sits at the bottom, under Start day, and the top only holds the greeting. Undo with the 'ios' class.
+  if (/iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) document.documentElement.classList.add('ios');
   var FORMAT = 'btcwalk', PFORMAT = 'btcproject';
 
   // ---------- the demo job (generic) ----------
