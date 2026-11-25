@@ -6,7 +6,7 @@
    (⋮ › Load project). No server, nothing sent anywhere else. */
 'use strict';
 (function () {
-  var VERSION = '2.9.2';
+  var VERSION = '2.10';
   var FORMAT = 'btcwalk', PFORMAT = 'btcproject';
 
   // ---------- the demo job (generic) ----------
@@ -273,8 +273,8 @@
     if (!ds.length) html += '<div class="empty"><b>Nothing logged yet.</b><br>Start the day and type: a note, a photo, a clash (<b>what changed ; what next</b>) or an action (<b>@person</b>). A day you don’t log anything has no card.</div>';
     var hasT = ds.some(function (d) { return d.day === t; });
     main.innerHTML = '<div class="scroll"><div class="pad">' + html + '</div></div><div class="foot"><button type="button" class="btn primary" data-act="today">' + (hasT ? 'Open today' : '＋ Start day') + '</button>' +
-      (hasT && !(S.closed || {})[t] ? '<button type="button" class="btn ship" data-act="closeday">Close the day</button></div>'
-        : '<button type="button" class="btn ship' + (waiting.length ? '' : ' done') + '" data-act="ship">' + (hasT && (S.closed || {})[t] ? 'Closed' : 'Ship') + (waiting.length ? '<span class="count">' + waiting.length + '</span>' : '') + '</button></div>');
+      (hasT && !(S.closed || {})[t] ? '<button type="button" class="btn ship" data-act="closeday">Close Day</button></div>'
+        : '<button type="button" class="btn ship' + (waiting.length ? '' : ' done') + '" data-act="ship">' + (hasT && (S.closed || {})[t] ? (waiting.length ? 'Send changes' : 'Closed') : 'Ship') + (waiting.length ? '<span class="count">' + waiting.length + '</span>' : '') + '</button></div>');
     wxNow().then(function (h) { var sl = $('wxnow'); if (sl && S.view === 'days') sl.innerHTML = h; });
   }
 
@@ -499,6 +499,31 @@
     try { return JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(j.iv) }, key, unb64(j.data)))); }
     catch (e) { throw new Error('The team password doesn’t open it. Check it in ⋮ › Your actions.'); }
   }
+  // ---------- shipping through btc-drop (2.10) ----------
+  // Ship and Close Day lock the day with the team password (packLock: the same crypto as BTC's, kept in step by hand) and
+  // put it in btc-drop at inbox/<job hash>/<file>.lock; BTC (Actions) takes it in, files it like the BTC Inbox and removes
+  // it. No key, no password, no signal, or GitHub says no: the email/share way, as before.
+  function b64(buf) { var s2 = '', a = new Uint8Array(buf); for (var i = 0; i < a.length; i += 0x8000) s2 += String.fromCharCode.apply(null, a.subarray(i, i + 0x8000)); return btoa(s2); }
+  async function packLock(obj, pass) {
+    var salt = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12));
+    var base = await crypto.subtle.importKey('raw', new TextEncoder().encode(pass), 'PBKDF2', false, ['deriveKey']);
+    var key = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt: salt, iterations: 310000, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, false, ['encrypt']);
+    var data = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, key, new TextEncoder().encode(JSON.stringify(obj)));
+    return JSON.stringify({ btcpack: 1, kdf: 'PBKDF2-SHA256', iter: 310000, salt: b64(salt), iv: b64(iv), data: b64(data) });
+  }
+  async function dropSend(body, name) {
+    var cfg = S.packCfg || (await kvGet('packs')) || {};
+    if (!cfg.key || !cfg.pass || S.proj.demo) return false;
+    if (!navigator.onLine) throw new Error('no signal');
+    var job = (await sha256hex('btc-job:' + S.proj.project.id)).slice(0, 16), locked = await packLock(body, cfg.pass);
+    var r = await fetch('https://api.github.com/repos/' + PACK_REPO + '/contents/inbox/' + job + '/' + encodeURIComponent(name) + '.lock', { method: 'PUT', cache: 'no-store',
+      headers: { Authorization: 'Bearer ' + cfg.key, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: 'ship', content: b64(new TextEncoder().encode(locked)) }) });
+    if (r.status === 401) throw new Error('GitHub turned the key down');
+    if (r.status === 403 || r.status === 404) throw new Error('the key can’t write to btc-drop (it needs Contents: read and write)');
+    if (!r.ok) throw new Error('GitHub answered ' + r.status);
+    return true;
+  }
   async function packsLoad(quiet) {
     if (!S.proj || S.proj.demo || !S.me) return;
     var cfg = (await kvGet('packs')) || {}; S.packCfg = cfg;
@@ -569,7 +594,7 @@
     var who = {}; es.forEach(function (e) { if (e.type === 'action') String(e.who || 'you').split(/\s+/).forEach(function (h) { who[S.me && h === S.me.handle ? 'you' : h] = 1; }); });
     var row = function (col, label, sub, n) { return n ? '<div><span class="dotl" style="background:' + col + '"></span><span class="lt"><b>' + label + '</b>' + (sub ? '<span>' + esc(sub) + '</span>' : '') + '</span><span class="rv">' + n + '</span></div>' : ''; };
     sheet('<div class="grip"></div><div class="shipped"><div class="tickc"><svg width="54" height="54" viewBox="0 0 52 52" role="img" aria-label="Shipped"><circle class="ring-d" cx="26" cy="26" r="23" fill="none" stroke="#D4FF3A" stroke-width="3"/><path class="tick-d" d="M15 27l7 7 15-16" fill="none" stroke="#D4FF3A" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>' +
-      '<h2>' + (S.justClosed ? 'Day closed' : 'Shipped') + '</h2><p>' + (S.justClosed ? 'Signed and on the way to BTC' + (S.justClosed.reviewer ? ', where ' + esc(S.justClosed.reviewer) + ' gets it to review and sign' : '') + '.<br>' : '') + (pick.length === 1 ? (pick[0].day === today() ? 'Today' : esc(dayLabel(pick[0].day))) + ' is' : pick.length + ' days are') + ' on the way to BTC.<br>It lands in your diary on the PC, and stays on this phone too.</p></div>' +
+      '<h2>' + (S.justClosed ? 'Day closed' : 'Shipped') + '</h2><p>' + (S.sentDirect ? '<b>Sent straight to BTC.</b> ' : '') + (S.justClosed ? 'Signed and on the way to BTC' + (S.justClosed.reviewer ? ', where ' + esc(S.justClosed.reviewer) + ' gets it to review and sign' : '') + '.<br>' : '') + (pick.length === 1 ? (pick[0].day === today() ? 'Today' : esc(dayLabel(pick[0].day))) + ' is' : pick.length + ' days are') + ' on the way to BTC.<br>It lands in your diary on the PC, and stays on this phone too.</p></div>' +
       '<div class="list">' + row('var(--note)', 'Notes', '', c.note) + row('var(--itp)', 'ITP evidence', evp ? evp + ' photo' + (evp === 1 ? '' : 's') + (lines.length ? ' → ' + lines.slice(0, 2).join(', ') + (lines.length > 2 ? '…' : '') : ' to sort on the PC') : '', c.itp) +
       row('var(--flow)', 'Clashes', 'to Build’s register', c.flowon) + row('var(--act)', 'Actions', 'cards for ' + Object.keys(who).join(', '), c.action) + '</div>' +
       '<button type="button" class="btn primary" data-act="closesheet" style="min-height:54px">Done</button>');
@@ -598,7 +623,9 @@
     var name = fileName(pick), file = new File([JSON.stringify(body)], name, { type: 'text/plain' });
     var save = function () { var a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = name; document.body.appendChild(a); a.click(); a.remove(); };
     var shared = false;
-    try {
+    try { if (await dropSend(body, name)) shared = 'drop'; }
+    catch (e0) { toast('Couldn’t send straight to BTC (' + e0.message + '): use email instead.', true); }
+    if (!shared) try {
       if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: name, text: (S.proj.project.name || '') + ' · site diary from BTC Walk' }); shared = true; }
       else { save(); shared = 'saved'; }
     } catch (e) {
@@ -617,7 +644,7 @@
     if (gone.length) { S.gone = (S.gone || []).filter(function (g) { return !pickDays[g.day]; }); await kvSet('gone:' + S.proj.project.id, S.gone); }
     S.shipPick = null; buzz([12, 60, 12]); S.view = 'days'; render();
     if (shared === 'saved') { closeSheet(); toast('The phone wouldn’t share it, so it’s in Downloads: attach ' + name + ' to an email to ship it.', true); return; }
-    shippedSheet(pick, es); S.justClosed = null;
+    S.sentDirect = shared === 'drop'; shippedSheet(pick, es); S.justClosed = null;
   }
 
 
@@ -629,11 +656,11 @@
     day = day || today();
     var last = (await kvGet('reviewer:' + S.proj.project.id)) || '', ps = (S.proj.people || []).filter(function (p) { return p.team !== false && !(S.me && p.handle === S.me.handle); });
     var es = S.entries.filter(function (e) { return e.day === day && e.type !== 'weather'; }), c = counts(es), role = myPerson().role || '';
-    sheet('<div class="grip"></div><h2>Close the day</h2><p>' + esc(dayLabel(day)) + ' · ' + es.length + ' line' + (es.length === 1 ? '' : 's') + (c.photo ? ' · ' + c.photo + ' photo' + (c.photo === 1 ? '' : 's') : '') + '</p>' +
+    sheet('<div class="grip"></div><h2>Close Day</h2><p>' + esc(dayLabel(day)) + ' · ' + es.length + ' line' + (es.length === 1 ? '' : 's') + (c.photo ? ' · ' + c.photo + ' photo' + (c.photo === 1 ? '' : 's') : '') + '</p>' +
       '<div class="list"><button type="button" data-act="closeprev" data-v="' + day + '"><span class="lt"><b>See the page</b><span>The day as it prints, weather on top</span></span></button></div>' +
       '<div class="sigrow">' + (S.sig ? '<img src="' + S.sig + '" alt="Your signature">' : '<span class="nosig">No signature yet</span>') + '<span class="lt"><b>' + esc(S.me ? S.me.name : '') + '</b><span>' + esc(role || 'Prepared by') + '</span></span><button type="button" class="btn" data-act="sigset" style="min-height:40px">' + (S.sig ? 'Change' : 'Add') + '</button></div>' +
       '<label class="fld"><span>Reviewer</span><select id="cl-rev"><option value="">Nobody, just sign</option>' + ps.map(function (p) { return '<option value="' + esc(p.handle) + '"' + (p.handle === last ? ' selected' : '') + '>' + esc(p.name + (p.role ? ' · ' + p.role : '')) + '</option>'; }).join('') + '</select></label>' +
-      '<button type="button" class="btn primary" data-act="doclose" data-v="' + day + '" style="min-height:56px;font-size:17px"' + (S.sig ? '' : ' disabled') + '>Sign and close the day</button>');
+      '<button type="button" class="btn primary" data-act="doclose" data-v="' + day + '" style="min-height:56px;font-size:17px"' + (S.sig ? '' : ' disabled') + '>Sign and Close Day</button>');
   }
   async function doClose(day) {
     if (!S.sig) { sigSheet(); return; }
@@ -867,7 +894,7 @@
     if (S.view !== 'dayprint') return;
     main.innerHTML = '<div class="dhead noprint"><button type="button" class="icon" data-act="back" aria-label="Back to the day"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>' +
       '<span class="t"><b>Compile this day</b><span>' + esc(dayLabel(d)) + ' · ' + esc(tot) + '</span></span></div><div class="scroll"><div class="pad pp-wrap">' + html + '</div></div>' +
-      '<div class="foot"><button type="button" class="btn" data-act="print">Share as PDF</button>' + (d === today() && !(S.closed || {})[d] ? '<button type="button" class="btn primary" data-act="closeday">Sign and close</button>' : '<button type="button" class="btn primary" data-act="back">Done</button>') + '</div>';
+      '<div class="foot"><button type="button" class="btn" data-act="print">Share as PDF</button>' + (!(S.closed || {})[d] ? '<button type="button" class="btn primary" data-act="closeday" data-v="' + d + '">Close Day</button>' : '<button type="button" class="btn primary" data-act="back">Done</button>') + '</div>';
   }
 
   // ---------- the week's recap (2.0) ----------
@@ -885,7 +912,7 @@
       '<div class="rnote">' + esc(note) + '</div></div>' +
       (waiting ? '<div class="bar-warn">' + waiting + ' day' + (waiting === 1 ? '' : 's') + ' waiting to ship<button type="button" data-act="ship">Ship</button></div>' : es.length ? '<div class="allclear"><i>' + TICK.replace('currentColor', '#7BE0A6') + '</i><div><b>All clear</b><span>Everything is shipped. Nothing waiting.</span></div></div>' : '');
     main.innerHTML = '<div class="dhead noprint">' + '<button type="button" class="icon" data-act="back" aria-label="Back"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>' + '<span class="t"><b>This week</b><span>' + esc(dayLabel(wk.from)) + ' – ' + esc(dayLabel(wk.to)) + '</span></span></div><div class="scroll"><div class="pad">' + html + '</div></div>' +
-      '<div class="foot"><button type="button" class="btn" data-act="print">Share as PDF</button>' + (d === today() && !(S.closed || {})[d] ? '<button type="button" class="btn primary" data-act="closeday">Sign and close</button>' : '<button type="button" class="btn primary" data-act="back">Done</button>') + '</div>';
+      '<div class="foot"><button type="button" class="btn" data-act="print">Share as PDF</button>' + (!(S.closed || {})[d] ? '<button type="button" class="btn primary" data-act="closeday" data-v="' + d + '">Close Day</button>' : '<button type="button" class="btn primary" data-act="back">Done</button>') + '</div>';
   }
 
   // ---------- free up space (2.0) ----------
@@ -1240,7 +1267,7 @@
     else if (act === 'checkupd') { closeSheet(); checkUpdate(true); }
     else if (act === 'earlier') { S.showEarlier = true; renderDays(); }
     else if (act === 'ship') shipSheet();
-    else if (act === 'closeday') closeDaySheet(today());
+    else if (act === 'closeday') { closeSheet(); closeDaySheet(t.dataset.v || today()); }
     else if (act === 'sendnow') { closeSheet(); shipSheet(); }
     else if (act === 'closeprev') { closeSheet(); S.day = t.dataset.v; S.view = 'dayprint'; S.fromClose = true; render(); }
     else if (act === 'doclose') doClose(t.dataset.v);

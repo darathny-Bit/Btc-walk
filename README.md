@@ -58,8 +58,11 @@ The look and feel are in [DESIGN.md](DESIGN.md). What 2.0 adds:
 - **Amended:** a line changed after it was shipped keeps what it said before (`was`, `amendedAt`), and BTC prints both.
 - **Ship file:** `weather: { "<day>": { source, at, loc, hours: { "<h>": { t, ws, wd, cloud, mm, sym } } } }` with the forecast; entries add `wx`, `crew`, `lost`, `was`, `wasType`, `amendedAt`.
 
-## Close the day (2.9)
-The home screen's main button at the end of the day is **Close the day**: **See the page** (the day as it prints: weather on top, the day in numbers, lines by place with each line's photos under it as P1, P2…, the sign-off, then the photos full size), your signature and title (title from the project file's `role`), a **Reviewer** (anyone in the team, remembered; or nobody), then **Sign and close the day**, which ships the whole day with `close` in the ship file. Once closed the button reads **Closed**; **⋮ › Send now, without closing** ships part-way through a day as before.
+## Straight to BTC (2.10)
+With the key and team password set (⋮ › Your actions; the key needs **Contents: read and write** on btc-drop), every ship is locked on the phone with the team password (the same lock as packs) and put in btc-drop at `inbox/<job hash>/<ship file name>.lock` (`dropSend`). The sheet says **Sent straight to BTC**; nothing to email. BTC's Actions checks that inbox every couple of minutes, files each day as it would from the BTC Inbox (a copy to `Processed/`) and deletes it from btc-drop. No key, no signal or GitHub saying no: it falls back to share / email, with the reason in a toast.
+
+## Close the day (2.9; Close Day from 2.10)
+The home screen's main button at the end of the day is **Close Day**; afterwards it reads **Send changes** when something changed, else **Closed**. A past day's page has its own **Close Day** at the foot until it's closed. The sheet: **See the page** (the day as it prints: weather on top, the day in numbers, lines by place with each line's photos under it as P1, P2…, the sign-off, then the photos full size), your signature and title (title from the project file's `role`), a **Reviewer** (anyone in the team, remembered; or nobody), then **Sign and Close Day**, which ships the whole day with `close` in the ship file. **⋮ › Send now, without closing** ships part-way through a day as before.
 
 **Your signature** (⋮ › Your signature, or from Close the day): draw it with a finger, or take a photo of it on paper (the paper turns clear, cropped to the ink; `inkOnly` is kept in step with BTC's `topbar.js`). It stays on this phone (`kv 'sig'`); a copy goes only with a day you close.
 
