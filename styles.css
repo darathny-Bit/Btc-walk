@@ -351,3 +351,32 @@ main.in-back { animation: in-back .24s var(--ease); }
 /* photos (2.5): a line's photos open full screen; the bin in the viewer takes one off the line you're writing */
 .e-ph img[data-lph] { cursor: zoom-in; }
 .viewer .vbin { position: absolute; top: calc(var(--safe-t) + 10px); left: 12px; height: 44px; padding: 0 14px; border-radius: 22px; border: 0; background: rgba(30,35,38,.8); color: #FF8A80; display: inline-flex; align-items: center; gap: 8px; font: inherit; font-size: 14px; font-weight: 600; }
+
+/* compile the day (2.6): a paper page in BTC's print colour (RGB 0 73 114), the same on screen and in the PDF */
+.pp-wrap { padding: 14px 12px 24px; }
+.paper { background: #fff; color: #1C2329; border-radius: 6px; padding: 22px 18px 18px; font-size: 13px; line-height: 1.45; box-shadow: 0 10px 40px rgba(0,0,0,.4); }
+.pp-h { border-bottom: 3px solid #004972; padding-bottom: 10px; margin-bottom: 10px; }
+.pp-kick { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #004972; }
+.paper h1 { font-size: 22px; color: #004972; margin: 2px 0; }
+.paper h2 { font-size: 14px; color: #004972; margin: 16px 0 6px; padding-top: 10px; border-top: 1px solid #D5DEE6; }
+.pp-job { color: #4A5864; font-size: 12.5px; }
+.pp-wx { background: #E6EEF3; color: #1C2329; border-radius: 6px; padding: 8px 10px; margin: 8px 0; font-size: 12.5px; }
+.pp-tot { color: #4A5864; font-size: 12px; margin-bottom: 6px; }
+.pp-place { margin: 12px 0 2px; font-weight: 700; color: #004972; font-size: 12.5px; }
+.pp-l { display: grid; grid-template-columns: 40px 64px 1fr; gap: 8px; padding: 6px 0; border-top: 1px solid #E3E7EC; break-inside: avoid; }
+.pp-t { font-family: var(--mono); font-size: 11.5px; color: #4A5864; padding-top: 1px; }
+.pp-k { justify-self: start; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #004972; background: #E6EEF3; border-radius: 4px; padding: 2px 5px; height: fit-content; }
+.pp-k.k-flowon { color: #9A3412; background: #FDEBDD; } .pp-k.k-action { color: #5B36B0; background: #EDE7FA; } .pp-k.k-delay { color: #B42318; background: #FDECEA; }
+.pp-b i { color: #4A5864; }
+.pp-r { color: #4A5864; font-size: 11.5px; margin-top: 2px; }
+.pp-ph { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; margin-top: 5px; }
+.pp-ph img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 3px; }
+.pp-none { color: #4A5864; font-style: italic; margin: 12px 0; }
+.pp-ra { margin: 0; padding-left: 18px; } .pp-ra li { margin: 3px 0; } .pp-ra span { color: #4A5864; }
+.pp-sign { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 12px; margin-top: 22px; }
+.pp-sign div { border-top: 1px solid #1C2329; padding-top: 4px; } .pp-sign span { display: block; font-size: 10.5px; color: #4A5864; } .pp-sign b { font-size: 12.5px; }
+.pp-foot { margin-top: 14px; font-size: 10.5px; color: #8A96A3; }
+@media print {
+  .pp-wrap { padding: 0; } .paper { box-shadow: none; border-radius: 0; padding: 0; }
+  .dhead { display: none !important; }
+}

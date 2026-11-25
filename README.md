@@ -58,6 +58,9 @@ The look and feel are in [DESIGN.md](DESIGN.md). What 2.0 adds:
 - **Amended:** a line changed after it was shipped keeps what it said before (`was`, `amendedAt`), and BTC prints both.
 - **Ship file:** `weather: { "<day>": { source, at, loc, hours: { "<h>": { t, ws, wd, cloud, mm, sym } } } }` with the forecast; entries add `wx`, `crew`, `lost`, `was`, `wasType`, `amendedAt`.
 
+## Compile a day (2.6)
+In a day, the page button (top right) compiles it as a site diary page in BTC's print colour: the job and who, the weather (the day's first forecast and what was logged), the lines in places with their photos three across, the clashes and actions raised, and a sign-off. **Share as PDF** opens the phone's print box (Save as PDF, or share it from there).
+
 ## Parties (2.4)
 Outside parties for the job (Beca, the Engineer, CCC) come from the project file (`parties`). Type `@` and they're offered with their role. An @ that isn't a person or a place (letters only) is a party: a new one is remembered on this phone and shipped to BTC, which adds it to the job's list. Each item runs one way: **↗ chase** (they owe us) or **↙ from** (they raised it, ours to do). `chase @Beca` and `from @Beca` say it; otherwise a raising word (asked, comments, query…) or a team member beside it makes it ours, else a chase. Tap the chip to turn it round (it changes the words).
 

@@ -6,7 +6,7 @@
    (⋮ › Load project). No server, nothing sent anywhere else. */
 'use strict';
 (function () {
-  var VERSION = '2.5';
+  var VERSION = '2.6';
   var FORMAT = 'btcwalk', PFORMAT = 'btcproject';
 
   // ---------- the demo job (generic) ----------
@@ -329,6 +329,7 @@
     var loc = S.loc ? (S.loc.itp ? (S.loc.area ? S.loc.area + ' · ' : '') + S.loc.itp : S.loc.name) : '';
     main.innerHTML = '<div class="dhead"><button type="button" class="icon" data-act="back" aria-label="Back to days"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>' +
       '<span class="t"><b>' + (d === today() ? 'Today · ' : '') + esc(dayLabel(d)) + '</b><span>' + esc(S.proj.project.code || '') + ' · ' + es.length + ' line' + (es.length === 1 ? '' : 's') + ' · ' + (es.length ? (un ? 'not shipped' : 'sent') : 'nothing yet') + '</span></span>' +
+      '<button type="button" class="icon" data-act="compileday" aria-label="Compile this day" title="Compile this day"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 12h7M9 16h7"/></svg></button>' +
       '<button type="button" class="icon' + (S.findOpen ? ' on' : '') + '" data-act="findday" aria-label="Search this day"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg></button></div>' +
       (S.findOpen ? '<div class="findbar"><input type="search" id="find-day" placeholder="Search this day" value="' + esc(S.find) + '" aria-label="Search this day"><span>' + (q ? shown.length + ' of ' + es.length : '') + '</span></div>' : '') +
       '<div class="chat" id="chat">' + (q ? '' : dayHead(d, es)) + (q && shown.length < es.length ? '<span class="note-c">' + (es.length - shown.length) + ' lines hidden · tap one to see it in the chat</span>' : '') +
@@ -683,6 +684,40 @@
     } catch (e) { if (!e || e.name !== 'AbortError') toast('Could not share: ' + e.message, true); }
   }
 
+  // ---------- compile the day (2.6) ----------
+  // The day as a site diary page, like BTC's compiled diary (the same print colour, RGB 0 73 114): the job and who, the
+  // weather, the lines running in places with their photos three across, then the clashes and actions raised, and a
+  // sign-off. Share as PDF opens the phone's print box (Save as PDF, or share it from there).
+  async function renderDayPrint() {
+    var d = S.day, es = S.entries.filter(function (e) { return e.day === d; }).sort(function (a, b) { return a.time < b.time ? -1 : 1; });
+    var lines = es.filter(function (e) { return e.type !== 'weather'; }), wl = es.filter(function (e) { return e.type === 'weather'; });
+    var st = await wxStart(d).catch(function () { return null; });
+    var TAG = { note: 'Note', flowon: 'Clash', action: 'Action', itp: 'ITP', delay: 'Delay', instruction: 'Instruction', crew: 'Crew', visitor: 'Visitor' };
+    var wx = [st && st.sum ? 'Forecast at ' + (/^\d{1,2}:\d{2}$/.test(String(st.at)) ? st.at : hm(st.at)) + ': ' + st.sum : '', wl.map(function (e) { return 'Logged ' + hm(e.time) + ': ' + (wxWords(e.wx) || e.text); }).join(' · ')].filter(Boolean);
+    var c = counts(es), lost = lines.filter(function (e) { return e.type === 'delay'; }).reduce(function (t, e) { return t + (+e.lost || 0); }, 0);
+    var tot = [lines.length + ' line' + (lines.length === 1 ? '' : 's'), c.photo ? c.photo + ' photo' + (c.photo === 1 ? '' : 's') : '', c.flowon ? c.flowon + ' clash' + (c.flowon === 1 ? '' : 'es') : '', c.action ? c.action + ' action' + (c.action === 1 ? '' : 's') : '', lost ? fmtH(lost) + ' lost' : ''].filter(Boolean).join(' · ');
+    var last = null, body = lines.map(function (e) {
+      var p = placeOf(e), h = '';
+      if (p && p !== last) h = '<div class="pp-place">at ' + esc(p) + '</div>';
+      last = p;
+      var ref = [e.itp && e.line ? e.itp + ' ' + e.line : '', e.who ? whoTxt(e.who) : '', e.party ? (e.dir === 'ours' ? '↙ from ' : '↗ chase ') + e.party : '', e.priority || '', e.due ? 'due ' + dayLabel(e.due) : '', e.type === 'delay' && e.lost ? fmtH(e.lost) + ' lost' : ''].filter(Boolean).join(' · ');
+      var ps = pics(e);
+      return h + '<div class="pp-l"><span class="pp-t">' + hm(e.time) + '</span><span class="pp-k k-' + esc(e.type) + '">' + esc(TAG[e.type] || 'Note') + '</span><div class="pp-b"><div>' + esc(e.text || (ps.length ? '' : '–')) + (e.action ? ' <b>→ ' + esc(e.action) + '</b>' : '') + (e.was ? ' <i>(amended; was: ' + esc(e.was) + ')</i>' : '') + '</div>' +
+        (ref ? '<div class="pp-r">' + esc(ref) + '</div>' : '') + (ps.length ? '<div class="pp-ph">' + ps.map(function (x) { return '<img src="' + x + '" alt="">'; }).join('') + '</div>' : '') + '</div></div>';
+    }).join('');
+    var raised = lines.filter(function (e) { return e.type === 'flowon' || e.type === 'action'; });
+    var html = '<div class="paper"><header class="pp-h"><div class="pp-kick">Site diary</div><h1>' + esc(dayLabel(d)) + '</h1><div class="pp-job">' + esc(S.proj.project.name || '') + ' · ' + esc(S.me ? S.me.name : '') + '</div></header>' +
+      (wx.length ? '<div class="pp-wx">' + wx.map(esc).join('<br>') + '</div>' : '') + '<div class="pp-tot">' + esc(tot) + '</div>' +
+      (body || '<p class="pp-none">No commissioning activities recorded.</p>') +
+      (raised.length ? '<h2>Clashes and actions raised</h2><ul class="pp-ra">' + raised.map(function (e) { return '<li><b>' + (e.type === 'flowon' ? 'Clash' : 'Action') + '</b> ' + esc(e.text) + (e.action ? ' → ' + esc(e.action) : '') + (e.type === 'action' ? ' <span>(' + esc(e.who ? whoTxt(e.who) : S.me ? '@' + S.me.handle : 'you') + (e.party ? ', ' + (e.dir === 'ours' ? 'from ' : 'chase ') + esc(e.party) : '') + (e.due ? ', due ' + esc(dayLabel(e.due)) : '') + ')</span>' : '') + '</li>'; }).join('') + '</ul>' : '') +
+      '<div class="pp-sign"><div><span>Recorded by</span><b>' + esc(S.me ? S.me.name : '') + '</b></div><div><span>Signed</span><b>&nbsp;</b></div><div><span>Date</span><b>&nbsp;</b></div></div>' +
+      '<div class="pp-foot">Compiled ' + esc(dayLabel(today())) + ' ' + hm(new Date().toISOString()) + ' from BTC Walk' + (es.some(function (e) { return !e.shipped; }) ? ' · not all lines shipped to BTC yet' : '') + '</div></div>';
+    if (S.view !== 'dayprint') return;
+    main.innerHTML = '<div class="dhead noprint"><button type="button" class="icon" data-act="back" aria-label="Back to the day"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>' +
+      '<span class="t"><b>Compile this day</b><span>' + esc(dayLabel(d)) + ' · ' + esc(tot) + '</span></span></div><div class="scroll"><div class="pad pp-wrap">' + html + '</div></div>' +
+      '<div class="foot"><button type="button" class="btn" data-act="print">Share as PDF</button><button type="button" class="btn primary" data-act="back">Done</button></div>';
+  }
+
   // ---------- the week's recap (2.0) ----------
   function renderRecap() {
     var t = today(), wk = weekOf(t), es = wk.es, c = counts(es), per = [], mx = 0;
@@ -909,8 +944,8 @@
     $('proj').textContent = (S.proj.project.code || S.proj.project.name || '') + ' ▾';
     $('find').classList.toggle('on', S.view === 'findall');
     var was = S.shown; S.shown = S.view;
-    if (S.view === 'day') renderDay(); else if (S.view === 'findall') renderFindAll(); else if (S.view === 'evidence') renderEvidence(); else if (S.view === 'recap') renderRecap(); else renderDays();
-    if (was && was !== S.view) slide(S.view === 'days' ? 'back' : 'fwd');
+    if (S.view === 'day') renderDay(); else if (S.view === 'dayprint') renderDayPrint(); else if (S.view === 'findall') renderFindAll(); else if (S.view === 'evidence') renderEvidence(); else if (S.view === 'recap') renderRecap(); else renderDays();
+    if (was && was !== S.view) slide(S.view === 'days' || (S.view === 'day' && was === 'dayprint') ? 'back' : 'fwd');
     stretchable();
     sync();
   }
@@ -926,7 +961,7 @@
   // (or search) to the days. On the days, Back once says "Press back again to leave"; a second Back leaves. Each open layer
   // is one history entry above a guard entry; sync() keeps the count in step with what's open after every draw.
   var H = { n: 0, guard: false, skip: 0, leaving: null };
-  function layers() { return (S.view !== 'days' ? 1 : 0) + (sheetOpen() ? 1 : 0) + (S.view === 'day' && S.edit ? 1 : 0) + (S.view === 'day' && S.findOpen ? 1 : 0) + (S.view === 'evidence' && S.evItp ? 1 : 0) + (viewerOpen() ? 1 : 0); }
+  function layers() { return (S.view !== 'days' ? 1 : 0) + (S.view === 'dayprint' ? 1 : 0) + (sheetOpen() ? 1 : 0) + (S.view === 'day' && S.edit ? 1 : 0) + (S.view === 'day' && S.findOpen ? 1 : 0) + (S.view === 'evidence' && S.evItp ? 1 : 0) + (viewerOpen() ? 1 : 0); }
   function sync() {
     if (!H.ready) return;
     if (!H.guard) { history.pushState({ walk: 'guard' }, ''); H.guard = true; }
@@ -940,6 +975,7 @@
     if (S.view === 'evidence' && S.evItp) { S.evItp = null; S.evLine = null; renderEvidence(); slide('back'); return; }
     if (S.view === 'day' && S.edit) { S.edit = null; S.as = null; renderDay(); return; }
     if (S.view === 'day' && S.findOpen) { S.findOpen = false; S.find = ''; renderDay(); return; }
+    if (S.view === 'dayprint') { S.view = 'day'; render(); return; }
     if (S.view !== 'days') { S.view = 'days'; S.edit = null; S.findOpen = false; S.find = ''; render(); }
   }
   window.addEventListener('popstate', function () {
@@ -982,7 +1018,8 @@
     var act = t.dataset.act;
     if (!act) return;
     if (act === 'today') openDay(today());
-    else if (act === 'back') { if (S.view === 'evidence' && S.evItp) { history.back(); return; } S.view = 'days'; S.edit = null; render(); }
+    else if (act === 'back') { if ((S.view === 'evidence' && S.evItp) || S.view === 'dayprint') { history.back(); return; } S.view = 'days'; S.edit = null; render(); }
+    else if (act === 'compileday') { S.edit = null; S.findOpen = false; S.find = ''; S.view = 'dayprint'; render(); }
     else if (act === 'evidence') { S.view = 'evidence'; S.evItp = null; S.evLine = null; render(); }
     else if (act === 'recap') { S.view = 'recap'; render(); }
     else if (act === 'print') window.print();
