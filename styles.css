@@ -441,4 +441,4 @@ main.in-back { animation: in-back .24s var(--ease); }
 
 /* iPhone (2.16.1): iOS 27 lays a hazy glass over the top of home-screen web apps, so the bar is taller there:
    empty black at the top under the haze, its buttons shifted down below it */
-html.ios .bar { padding-top: calc(max(var(--safe-t), 20px) + 30px); }
+html.ios .bar { padding-top: calc(max(var(--safe-t), 20px) + 18px); }

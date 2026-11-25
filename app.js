@@ -6,7 +6,7 @@
    (⋮ › Load project). No server, nothing sent anywhere else. */
 'use strict';
 (function () {
-  var VERSION = '2.16.2';
+  var VERSION = '2.16.3';
   // iPhone (2.16.1): iOS 27 lays a frozen glass blur over the top of home-screen web apps, so on an iPhone or iPad the top
   // bar is taller, its buttons shifted down below the haze. Undo with the 'ios' class.
   if (/iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) document.documentElement.classList.add('ios');
