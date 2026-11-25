@@ -261,6 +261,7 @@ mark { background: rgba(212,255,58,.22); color: #E9FF9A; border-radius: 4px; pad
 .toast .tt { flex: 1; padding: 6px 0; }
 .toast .tu { flex: none; min-height: 36px; padding: 0 14px; border-radius: 18px; border: 0; background: #2A3033; color: var(--lime); font-weight: 600; font-size: 13px; }
 .toast.bad { background: rgba(70,22,20,.96); border-color: rgba(255,107,96,.35); }
+.sheet-wrap:not([hidden]) + .toast { bottom: auto; top: calc(env(safe-area-inset-top, 0px) + 12px); }   /* over a sheet: at the top, so Undo stays in reach (2.11) */
 
 /* motion and feel: short, springy, follows the finger; none if the phone asks for reduced motion */
 button { -webkit-user-select: none; user-select: none; touch-action: manipulation; transition: transform .1s ease, background-color .15s ease, filter .12s ease, border-color .15s ease; }
@@ -407,8 +408,15 @@ main.in-back { animation: in-back .24s var(--ease); }
 
 /* your actions from BTC (2.8) */
 .pas { display: flex; flex-direction: column; border-radius: 18px; background: var(--panel); border: 1px solid var(--line); overflow: hidden; }
-.pa { display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; border-top: 1px solid var(--line); }
-.pa:first-child { border-top: 0; }
+.pa-sw { position: relative; border-top: 1px solid var(--line); touch-action: pan-y; user-select: none; -webkit-user-select: none; }
+.pa-sw:first-child { border-top: 0; }
+.pa-bg { position: absolute; inset: 0; display: flex; align-items: center; justify-content: space-between; padding: 0 18px; font-weight: 700; font-size: 14px; color: #1A1A1A; background: var(--panel); }
+.pa-bg span { opacity: .55; transition: opacity .12s, transform .12s; }
+.pa-sw[data-dir=done] .pa-bg { background: #7FD8A6; } .pa-sw[data-dir=done] .pa-bp { visibility: hidden; }
+.pa-sw[data-dir=pass] .pa-bg { background: #F2B65A; } .pa-sw[data-dir=pass] .pa-bd { visibility: hidden; }
+.pa-sw.go .pa-bg span { opacity: 1; transform: scale(1.08); }
+.pa { position: relative; display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; background: var(--panel); transition: transform .18s ease; }
+.pa-hint { font-size: 12px; color: var(--muted); text-align: center; margin: 6px 0 2px; }
 .pa-tick { flex: none; width: 26px; height: 26px; margin-top: 1px; border-radius: 50%; border: 2px solid var(--act); background: transparent; position: relative; }
 .pa-tick::before { content: ''; position: absolute; inset: -9px; }
 .pa-b { flex: 1; min-width: 0; }

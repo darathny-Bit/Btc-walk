@@ -6,7 +6,7 @@
    (⋮ › Load project). No server, nothing sent anywhere else. */
 'use strict';
 (function () {
-  var VERSION = '2.10';
+  var VERSION = '2.11';
   var FORMAT = 'btcwalk', PFORMAT = 'btcproject';
 
   // ---------- the demo job (generic) ----------
@@ -65,7 +65,7 @@
     var t = $('toast'); toastUndo = undo || null;
     t.innerHTML = '<span class="tt">' + esc(msg) + '</span>' + (undo ? '<button type="button" class="tu" data-act="undo">' + esc(undo.label || 'Undo') + '</button>' : '');
     t.className = 'toast' + (bad ? ' bad' : ''); t.hidden = false; void t.offsetWidth; t.classList.add('pop'); clearTimeout(toastT);
-    toastT = setTimeout(function () { t.hidden = true; toastUndo = null; }, bad ? 5000 : undo ? 4000 : 2400);
+    toastT = setTimeout(function () { t.hidden = true; toastUndo = null; }, bad ? 5000 : undo ? (undo.ms || 4000) : 2400);
   }
   function uid() { return (S.me ? S.me.handle : 'X') + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7); }
 
@@ -545,19 +545,60 @@
     if (S.view === 'days') renderDays();
   }
   function packList() { var done = {}; (S.packDone || []).forEach(function (d) { done[d.id] = 1; }); return ((S.pack && S.pack.actions) || []).filter(function (a) { return !done[a.id]; }); }
+  // Done or passed on, on site (2.8; pass on 2.11): off the list now, to BTC with the next ship; Undo for 6 seconds puts it back
+  async function packMark(pid, to) {
+    var a = ((S.pack && S.pack.actions) || []).filter(function (x) { return x.id === pid; })[0]; if (!a) return;
+    var who = to ? (S.proj.people || []).filter(function (p) { return p.handle === to; })[0] : null;
+    S.packDone = (S.packDone || []).concat([Object.assign({ id: pid, file: a.file || '', at: new Date().toISOString() }, to ? { to: to } : {})]);
+    await kvSet('packDone:' + S.proj.project.id, S.packDone); buzz(to ? [8, 40, 8] : 10); renderDays();
+    toast(to ? 'Passed on to ' + (who ? who.name.split(' ')[0] : '@' + to) : 'Done', false, { label: 'Undo', ms: 6000, fn: async function () { S.packDone = S.packDone.filter(function (d) { return d.id !== pid || d.sent; }); await kvSet('packDone:' + S.proj.project.id, S.packDone); renderDays(); } });
+  }
+  function passSheet(pid) {
+    var a = ((S.pack && S.pack.actions) || []).filter(function (x) { return x.id === pid; })[0]; if (!a) return;
+    var ps = (S.proj.people || []).filter(function (p) { return p.team !== false && !(S.me && p.handle === S.me.handle); });
+    S.passFor = pid;
+    sheet('<div class="grip"></div><h2>Pass on</h2><p>' + esc(a.title) + '</p><div class="list">' + ps.map(function (p) { return '<button type="button" data-passto="' + esc(p.handle) + '"><span class="lt"><b>' + esc(p.name) + '</b><span>' + esc(p.role || '@' + p.handle) + '</span></span></button>'; }).join('') + '</div>' +
+      '<button type="button" class="btn" data-act="closesheet" style="width:100%;margin-top:10px">Cancel</button>');
+  }
+  // Swipe a row (2.11): right is done, left is pass on. Past a third of the row (or a quick flick) it goes; short of it, it springs back.
+  (function () {
+    var sw = null;
+    document.addEventListener('pointerdown', function (e) {
+      var w = e.target.closest && e.target.closest('.pa-sw'); if (!w || e.target.closest('.pa-tick') || e.button > 0) return;
+      sw = { w: w, row: w.querySelector('.pa'), x: e.clientX, y: e.clientY, t: Date.now(), dx: 0, on: false, id: e.pointerId };
+    });
+    document.addEventListener('pointermove', function (e) {
+      if (!sw || e.pointerId !== sw.id) return;
+      var dx = e.clientX - sw.x, dy = e.clientY - sw.y;
+      if (!sw.on) { if (Math.abs(dy) > 12 && Math.abs(dy) > Math.abs(dx)) { sw = null; return; } if (Math.abs(dx) < 10) return; sw.on = true; sw.row.style.transition = 'none'; try { sw.w.setPointerCapture(e.pointerId); } catch (x) { /* fine */ } }
+      sw.dx = dx; sw.row.style.transform = 'translateX(' + dx + 'px)'; sw.w.dataset.dir = dx > 0 ? 'done' : 'pass';
+      sw.w.classList.toggle('go', Math.abs(dx) > sw.w.offsetWidth / 3);
+    });
+    var end = function (e) {
+      if (!sw || (e && e.pointerId !== sw.id)) return;
+      var s = sw; sw = null; if (!s.on) return;
+      var far = Math.abs(s.dx) > s.w.offsetWidth / 3 || (Math.abs(s.dx) > 60 && Date.now() - s.t < 250);
+      s.row.style.transition = '';
+      if (far && s.dx > 0) { s.row.style.transform = 'translateX(110%)'; setTimeout(function () { packMark(s.w.dataset.pid); }, MOTION ? 160 : 0); }
+      else { s.row.style.transform = ''; s.w.classList.remove('go'); if (far) passSheet(s.w.dataset.pid); }
+    };
+    document.addEventListener('pointerup', end); document.addEventListener('pointercancel', function () { if (sw) { sw.row.style.transition = ''; sw.row.style.transform = ''; sw.w.classList.remove('go'); sw = null; } });
+  })();
   function packHtml() {
     if (!S.pack && !S.packErr) return '';
     var t = today(), list = packList(), late = list.filter(function (a) { return a.due && a.due < t; }).length;
     var show = S.packAll ? list : list.slice(0, 4);
     var row = function (a) {
       var chase = a.kind === 'chase', due = a.due ? (a.due < t ? 'late · ' : '') + dayLabel(a.due) : '';
-      return '<div class="pa' + (a.due && a.due < t ? ' late' : '') + '"><button type="button" class="pa-tick" data-pdone="' + esc(a.id) + '" aria-label="Done: ' + esc(a.title) + '"></button>' +
-        '<span class="pa-b"><b>' + (a.prio === 1 ? '<i class="pa-p">P1</i>' : '') + esc(a.title) + '</b><span>' + [chase ? '↗ chase ' + esc(a.waitingOn) : a.raisedBy ? '↙ from ' + esc(a.raisedBy) : '', a.with && a.with.length ? 'with ' + esc(a.with.map(function (x) { return '@' + x; }).join(' ')) : '', a.ref ? esc(a.ref) : '', due ? esc(due) : ''].filter(Boolean).join(' · ') + '</span></span></div>';
+      return '<div class="pa-sw" data-pid="' + esc(a.id) + '"><div class="pa-bg"><span class="pa-bd">✓ Done</span><span class="pa-bp">Pass on ⇢</span></div><div class="pa' + (a.due && a.due < t ? ' late' : '') + '"><button type="button" class="pa-tick" data-pdone="' + esc(a.id) + '" aria-label="Done: ' + esc(a.title) + '"></button>' +
+        '<span class="pa-b"><b>' + (a.prio === 1 ? '<i class="pa-p">P1</i>' : '') + esc(a.title) + '</b><span>' + [chase ? '↗ chase ' + esc(a.waitingOn) : a.raisedBy ? '↙ from ' + esc(a.raisedBy) : '', a.with && a.with.length ? 'with ' + esc(a.with.map(function (x) { return '@' + x; }).join(' ')) : '', a.ref ? esc(a.ref) : '', due ? esc(due) : ''].filter(Boolean).join(' · ') + '</span></span></div></div>';
     };
     return '<div class="sec">Your actions' + (list.length ? ' · ' + list.length + (late ? ' · <span class="pa-late">' + late + ' late</span>' : '') : '') + '</div>' +
       (S.packErr && !S.pack ? '<div class="bar-warn">' + esc(S.packErr) + '</div>' : '') +
       (list.length ? '<div class="pas">' + show.map(row).join('') + (list.length > 4 ? '<button type="button" class="pa-more" data-act="packall">' + (S.packAll ? 'Show fewer' : 'All ' + list.length) + '</button>' : '') + '</div>' : S.pack ? '<div class="allclear"><div><b>Nothing open</b><span>No actions or chases for you in BTC.</span></div></div>' : '') +
-      ((S.packDone || []).filter(function (d) { return !d.sent; }).length ? '<div class="bar-info">' + S.packDone.filter(function (d) { return !d.sent; }).length + ' done here · goes to BTC with your next ship</div>' : '');
+      (list.length ? '<div class="pa-hint">Swipe right: done · left: pass on</div>' : '') +
+      (function () { var w = (S.packDone || []).filter(function (d) { return !d.sent; }), nd = w.filter(function (d) { return !d.to; }).length, np = w.length - nd;
+        return w.length ? '<div class="bar-info">' + [nd ? nd + ' done' : '', np ? np + ' passed on' : ''].filter(Boolean).join(', ') + ' here · goes to BTC with your next ship</div>' : ''; })();
   }
   function packsSettings() {
     var c = S.packCfg || {};
@@ -617,7 +658,8 @@
     var wx = {}; for (var wi = 0; wi < pick.length; wi++) { var fc = await wxForecast(pick[wi].day), st0 = await wxStart(pick[wi].day); if (fc || st0) wx[pick[wi].day] = Object.assign({}, fc || { day: pick[wi].day, source: 'MET Norway', hours: {} }, st0 ? { start: st0 } : {}); }
     if (Object.keys(wx).length) body.weather = wx;
     if (CL) body.close = { date: CL.date, at: CL.at, sig: CL.sig, title: CL.title, reviewer: CL.reviewer };   // Close the day (2.9): signed here
-    var dn = (S.packDone || []).filter(function (d) { return !d.sent; }); if (dn.length) body.actionsDone = dn.map(function (d) { return { id: d.id, file: d.file, at: d.at }; });   // ticked on site (2.8)
+    var dn = (S.packDone || []).filter(function (d) { return !d.sent; }); if (dn.some(function (d) { return !d.to; })) body.actionsDone = dn.filter(function (d) { return !d.to; }).map(function (d) { return { id: d.id, file: d.file, at: d.at }; });   // ticked on site (2.8)
+    if (dn.some(function (d) { return d.to; })) body.actionsPassed = dn.filter(function (d) { return d.to; }).map(function (d) { return { id: d.id, file: d.file, at: d.at, to: d.to }; });   // swiped left, passed on (2.11)
     var np2 = (S.newParties || []).filter(function (x) { return !(S.proj.parties || []).some(function (y) { return key(y.name) === key(x.name); }); });
     if (np2.length) body.parties = np2.map(function (x) { return { name: x.name, role: x.role || '', contact: x.contact || '' }; });   // new to BTC (2.4)   // the forecast BTC needs to draw the job's weather (2.1); logged weather goes as lines
     var name = fileName(pick), file = new File([JSON.stringify(body)], name, { type: 'text/plain' });
@@ -1202,12 +1244,8 @@
     if (t && t.dataset.ins != null) { var bi = $('box'); if (!bi) return; var cur = bi.value; bi.value = /^\w+\.$/.test(t.dataset.ins.trim()) ? t.dataset.ins + cur.replace(/^\s+/, '') : cur.replace(/\s*$/, '') + (cur.trim() ? ' ' : '') + t.dataset.ins.replace(/^\s+/, ''); S.draft = bi.value; bi.focus(); bi.setSelectionRange(bi.value.length, bi.value.length); grow(); reads(); buzz(4); return; }
     if (t && t.dataset.ev) { S.evItp = t.dataset.ev; S.evLine = null; renderEvidence(); slide('fwd'); sync(); return; }
     if (t && t.dataset.evl) { S.evLine = S.evLine === t.dataset.evl ? null : t.dataset.evl; renderEvidence(); return; }
-    if (t && t.dataset.pdone) {   // done on site (2.8): off the list now, to BTC with the next ship; Undo puts it back
-      var pid = t.dataset.pdone; S.packDone = (S.packDone || []).concat([{ id: pid, file: ((S.pack && S.pack.actions) || []).filter(function (a) { return a.id === pid; }).map(function (a) { return a.file; })[0] || '', at: new Date().toISOString() }]);
-      await kvSet('packDone:' + S.proj.project.id, S.packDone); buzz(10); renderDays();
-      toast('Done · goes to BTC with your next ship', false, { label: 'Undo', fn: async function () { S.packDone = S.packDone.filter(function (d) { return d.id !== pid || d.sent; }); await kvSet('packDone:' + S.proj.project.id, S.packDone); renderDays(); } });
-      return;
-    }
+    if (t && t.dataset.pdone) { packMark(t.dataset.pdone); return; }   // the tick still works as well as the swipe
+    if (t && t.dataset.passto) { var pp = S.passFor; S.passFor = null; closeSheet(); if (pp) packMark(pp, t.dataset.passto); return; }
     if (t && t.dataset.ph != null) { S.viewBin = false; viewer(+t.dataset.ph); return; }
     var lph = ev.target.closest && ev.target.closest('[data-lph]');
     if (lph && !(S.edit && lph.closest('[data-e="' + S.edit + '"]'))) {   // a line's photo: full screen, not edit
@@ -1238,6 +1276,7 @@
     else if (act === 'compileday') { S.edit = null; S.findOpen = false; S.find = ''; S.view = 'dayprint'; render(); }
     else if (act === 'evidence') { S.view = 'evidence'; S.evItp = null; S.evLine = null; render(); }
     else if (act === 'recap') { S.view = 'recap'; render(); }
+    else if (act === 'closesheet') { S.passFor = null; closeSheet(); }
     else if (act === 'print') window.print();
     else if (act === 'shareev') shareEvidence();
     else if (act === 'vclose') history.back();

@@ -61,6 +61,9 @@ The look and feel are in [DESIGN.md](DESIGN.md). What 2.0 adds:
 ## Straight to BTC (2.10)
 With the key and team password set (⋮ › Your actions; the key needs **Contents: read and write** on btc-drop), every ship is locked on the phone with the team password (the same lock as packs) and put in btc-drop at `inbox/<job hash>/<ship file name>.lock` (`dropSend`). The sheet says **Sent straight to BTC**; nothing to email. BTC's Actions checks that inbox every couple of minutes, files each day as it would from the BTC Inbox (a copy to `Processed/`) and deletes it from btc-drop. No key, no signal or GitHub saying no: it falls back to share / email, with the reason in a toast.
 
+## Swipe your actions (2.11)
+On **Your actions**, swipe a row right for **done** (green) or left to **pass it on** (amber; pick a person from the team). Past a third of the row (or a quick flick) it goes; short of that it springs back. **Undo** shows for 6 seconds (at the top when a sheet is open). The tick still works. Both go with the next ship: done as `actionsDone`, passed as `actionsPassed: [{ id, file, at, to }]` (`to` = the person's handle).
+
 ## Close the day (2.9; Close Day from 2.10)
 The home screen's main button at the end of the day is **Close Day**; afterwards it reads **Send changes** when something changed, else **Closed**. A past day's page has its own **Close Day** at the foot until it's closed. The sheet: **See the page** (the day as it prints: weather on top, the day in numbers, lines by place with each line's photos under it as P1, P2…, the sign-off, then the photos full size), your signature and title (title from the project file's `role`), a **Reviewer** (anyone in the team, remembered; or nobody), then **Sign and Close Day**, which ships the whole day with `close` in the ship file. **⋮ › Send now, without closing** ships part-way through a day as before.
 
