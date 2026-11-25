@@ -61,6 +61,9 @@ The look and feel are in [DESIGN.md](DESIGN.md). What 2.0 adds:
 ## Straight to BTC (2.10)
 With the key and team password set (⋮ › Your actions; the key needs **Contents: read and write** on btc-drop), every ship is locked on the phone with the team password (the same lock as packs) and put in btc-drop at `inbox/<job hash>/<ship file name>.lock` (`dropSend`). The sheet says **Sent straight to BTC**; nothing to email. BTC's Actions checks that inbox every couple of minutes, files each day as it would from the BTC Inbox (a copy to `Processed/`) and deletes it from btc-drop. No key, no signal or GitHub saying no: it falls back to share / email, with the reason in a toast.
 
+## @all-m&e (2.15)
+`@all` is everyone in the job; `@all-m&e`, `@all-structures`, `@all-civil` (any team's name, letters and digits only) is everyone in that team. The project file carries the job's `teams: [{ id, name }]`; the line goes as `who: 'all-<team id>'` and BTC expands it. The @ list offers each team.
+
 ## The job comes by itself (2.14)
 With the key and team password in (⋮ › Your actions; on the demo it's ⋮ › **Connect to BTC**, first in the list, 2.14.1), the phone looks in btc-drop's `projects/` folder, opens each `.btcpack` with the team password and loads the job it finds over the demo (several: it asks which), then asks who you are. Build sends it (`projects/<job hash>.btcpack`, the project file locked like a pack) when someone makes it (⋮ › Phone project file…) and by itself when anything in it changed; the phone checks for a newer one every 10 minutes at most when it opens, and takes it without touching your days. **Load project…** still works for a file, and now takes any file (an iPhone greys out `.btcproject` otherwise); the app checks it.
 

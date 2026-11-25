@@ -6,7 +6,7 @@
    (⋮ › Load project). No server, nothing sent anywhere else. */
 'use strict';
 (function () {
-  var VERSION = '2.14.3';
+  var VERSION = '2.15';
   var FORMAT = 'btcwalk', PFORMAT = 'btcproject';
 
   // ---------- the demo job (generic) ----------
@@ -177,7 +177,8 @@
         text = (text.slice(0, i) + text.slice(i + cut)).replace(/\s{2,}/g, ' '); continue;
       }
       var m = /^@(\S+)/.exec(text.slice(i)), mh = m ? m[1].replace(/[,.;:]+$/, '') : '';
-      var who = m ? (/^(all|everyone)$/i.test(mh) ? { handle: 'all', name: 'Everyone' } : person(mh)) : null;   // @all: everyone in the team (1.7)
+      var aw = m ? /^(?:all|everyone)(?:-(.+))?$/i.exec(mh) : null, at = aw && aw[1] ? teamByWord(aw[1]) : null;
+      var who = m ? (aw && (!aw[1] || at) ? (at ? { handle: 'all-' + at.id, name: 'Everyone in ' + at.name } : { handle: 'all', name: 'Everyone' }) : person(mh)) : null;   // @all: everyone (1.7); @all-m&e: that team (2.15)
       if (who) { people.push(who); text = (text.slice(0, i) + text.slice(i + m[0].length)).replace(/\s{2,}/g, ' '); continue; }
       if (m && mh && !party && /^[a-z][a-z&'.-]*$/i.test(mh)) {   // a party: known, or new (it's remembered on send)
         var kp = partyBy(mh); party = kp ? { name: kp.name, role: kp.role || '' } : { name: mh.charAt(0).toUpperCase() + mh.slice(1), isNew: true };
@@ -371,7 +372,7 @@
       sg.innerHTML = li.lines.filter(function (l) { return !lk || l.no.indexOf(lk) === 0; }).slice(0, 14).map(function (l) { return '<button type="button" data-line="' + esc(l.no) + '">' + esc(l.no) + '<small>' + esc(l.text) + '</small></button>'; }).join('');
     } else if (at && at[1].length <= 24 && !/\s{2}/.test(at[1])) {
       var k = key(at[1]);
-      var list = (S.proj.people || []).map(function (x) { return { put: x.handle, label: x.name, sub: '@' + x.handle }; }).concat([{ put: 'all', label: 'Everyone', sub: '@all' }]).concat(partiesAll().map(function (x) { return { put: x.name.replace(/\s+/g, ''), label: x.name, sub: (x.role || 'party') + (x.contact ? ' · ' + x.contact : '') }; })).concat(places().map(function (x) { return { put: x.name, label: x.name, sub: x.kind === 'itp' ? x.area : x.kind }; }))
+      var list = (S.proj.people || []).map(function (x) { return { put: x.handle, label: x.name, sub: '@' + x.handle }; }).concat([{ put: 'all', label: 'Everyone', sub: '@all' }]).concat((S.proj.teams || []).map(function (t) { var tw = String(t.name).toLowerCase().replace(/\s+/g, ''); return { put: 'all-' + tw, label: 'Everyone in ' + t.name, sub: '@all-' + tw }; })).concat(partiesAll().map(function (x) { return { put: x.name.replace(/\s+/g, ''), label: x.name, sub: (x.role || 'party') + (x.contact ? ' · ' + x.contact : '') }; })).concat(places().map(function (x) { return { put: x.name, label: x.name, sub: x.kind === 'itp' ? x.area : x.kind }; }))
         .filter(function (x) { return !k || key(x.put).indexOf(k) === 0 || key(x.label).indexOf(k) === 0; }).slice(0, 12);
       if (list.length === 1 && k && (key(list[0].put) === k || key(list[0].label) === k)) list = [];   // already typed in full
       sg.innerHTML = list.map(function (x) { return '<button type="button" data-put="' + esc(x.put) + '">' + esc(x.label) + '<small>' + esc(x.sub) + '</small></button>'; }).join('');
@@ -870,6 +871,8 @@
       else { S.jobsFound = jobs; sheet('<div class="grip"></div><h2>Which job?</h2><p>BTC sends these to your team.</p><div class="list">' + jobs.map(function (j, k) { return '<button type="button" data-job="' + k + '"><span class="lt"><b>' + esc(j.project.name) + '</b><span>' + (j.people || []).length + ' people · ' + (j.areas || []).length + ' areas</span></span></button>'; }).join('') + '</div>'); }
     } catch (e) { /* no signal: next time */ }
   }
+  // the job's teams (2.15, from the project file): @all-m&e, @all-structures
+  function teamByWord(w) { var k = String(w || '').toLowerCase().replace(/[^a-z0-9]+/g, ''); return (S.proj && S.proj.teams || []).filter(function (t) { return t.id === k || String(t.name).toLowerCase().replace(/[^a-z0-9]+/g, '') === k; })[0] || null; }
   function pickMe() {
     var ps = (S.proj.people || []).filter(function (p) { return p.team !== false; });
     sheet('<div class="grip"></div><h2>Who are you?</h2><p>Your days go into your site diary in BTC. Pick yourself once on this phone.</p><div class="list">' +
