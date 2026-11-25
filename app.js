@@ -6,7 +6,7 @@
    (⋮ › Load project). No server, nothing sent anywhere else. */
 'use strict';
 (function () {
-  var VERSION = '2.9.1';
+  var VERSION = '2.9.2';
   var FORMAT = 'btcwalk', PFORMAT = 'btcproject';
 
   // ---------- the demo job (generic) ----------
@@ -1048,7 +1048,10 @@
   async function wxNow() {
     var t = today(), es = S.entries.filter(function (e) { return e.day === t; }), w = await wxCalc(t, es); if (!w) return '';
     S.wxShown = w;
-    var h = new Date().getHours(), cur = w.hrs.filter(function (x) { return x.h === h; })[0] || w.hrs.filter(function (x) { return x.sky; }).slice(-1)[0]; if (!cur || !cur.sky) return '';
+    // the weather now is this hour's, even before 7am or after 7pm (2.9.2: it used to fall back to the evening's sky)
+    var h = new Date().getHours(), cur = w.hrs.filter(function (x) { return x.h === h; })[0], f = w.fc && w.fc.hours && w.fc.hours[h];
+    if (!cur && f) cur = { h: h, sky: skyOf(f), t: f.t != null ? Math.round(f.t) : null, ws: f.ws, wd: f.wd };
+    if (!cur || !cur.sky) return '';
     var ws = cur.ws != null ? (compass(cur.wd) ? compass(cur.wd) + ' ' : '') + cur.ws : cur.windy ? 'windy' : '';
     return '<button type="button" class="wxc' + (cur.logged ? ' lg' : '') + '" data-act="wxdetail" aria-label="Weather now"><span class="wxc-t">' + WXICON[cur.sky] + '<b>' + (cur.t != null ? cur.t + '°' : WXSKY[cur.sky]) + '</b>' + (cur.logged ? '<i></i>' : '') + '</span>' +
       '<span class="wxc-s">' + [cur.t != null ? WXSKY[cur.sky] : '', ws].filter(Boolean).join(' · ') + '</span></button>';
