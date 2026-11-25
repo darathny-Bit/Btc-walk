@@ -163,8 +163,7 @@ mark { background: rgba(212,255,58,.22); color: #E9FF9A; border-radius: 4px; pad
 .thumb { position: relative; display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); animation: pop-in .22s var(--spring) both; }
 .thumb:nth-child(2) { animation-delay: .03s; } .thumb:nth-child(3) { animation-delay: .06s; } .thumb:nth-child(4) { animation-delay: .09s; }
 .thumb img { width: 48px; height: 48px; object-fit: cover; border-radius: 12px; }
-.thumb button { position: absolute; top: -8px; right: -8px; border: 0; border-radius: 50%; background: var(--panel3); color: var(--ink); font-size: 16px; line-height: 1; width: 26px; height: 26px; padding: 0; box-shadow: 0 0 0 2px #000; }
-.thumb button::before { content: ''; position: absolute; inset: -9px; }
+.thumb { border: 0; background: transparent; padding: 0; }
 @keyframes pop-in { from { transform: scale(.85); opacity: 0; } }
 .sug { display: flex; gap: 6px; overflow-x: auto; padding: 0 2px 2px; scrollbar-width: none; }
 .sug::-webkit-scrollbar { display: none; }
@@ -348,3 +347,7 @@ main.in-back { animation: in-back .24s var(--ease); }
 .chip.pty.chase { background: var(--flow-bg); color: var(--flow-ink); }
 .chip.pty.ours { background: var(--act-bg); color: var(--act-ink); }
 .e-m .pty.chase { color: var(--flow-ink); } .e-m .pty.ours { color: var(--act-ink); }
+
+/* photos (2.5): a line's photos open full screen; the bin in the viewer takes one off the line you're writing */
+.e-ph img[data-lph] { cursor: zoom-in; }
+.viewer .vbin { position: absolute; top: calc(var(--safe-t) + 10px); left: 12px; height: 44px; padding: 0 14px; border-radius: 22px; border: 0; background: rgba(30,35,38,.8); color: #FF8A80; display: inline-flex; align-items: center; gap: 8px; font: inherit; font-size: 14px; font-weight: 600; }

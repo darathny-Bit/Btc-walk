@@ -29,6 +29,8 @@ It opens on a made-up demo job. Load your job with ⋮ › **Load project…** a
 | `ITP. grout done` or `@ITP grout done` | **ITP** evidence you'll put on its line on the PC (Build's Sort page) |
 | `note.` `action.` `clash.` `ITP.` at the start | says what the line is (the word is dropped); `@clash` is the same as `clash.` (`flow.` and `@flow-on` still work) |
 
+**Photos (2.5):** tap a photo on a line to see it full screen (swipe or tap the sides for the others, × to close); tapping the words still edits the line. Editing a line, tap a photo above the box to see it; **Take off** in the viewer removes it, with Undo.
+
 Tap **LOG AS** to change the type before sending (note, clash, action, ITP). With ITP and no line, the last line you used is a one-tap chip. Tap a line to edit or delete it. The camera button takes a photo straight away; the photos button beside it picks several from the phone. Up to 10 photos go with the next line (each shrunk on the phone to about 200 KB): one description, several photos, for example 5 photos of `bolts torqued @ITP-06 3.2`. Take or pick more and they add on; × takes one off. Tap a line to edit it: its photos come back above the box to add to or take off.
 
 Due dates: `today`, `tomorrow`/`tmrw`, `fri`/`by Friday`/`on Fri`, `next Friday`, `eow`, `next week`, `in 3 days`, `28-11` or `28/11`. Saturday and Sunday need the full name.

@@ -6,7 +6,7 @@
    (⋮ › Load project). No server, nothing sent anywhere else. */
 'use strict';
 (function () {
-  var VERSION = '2.4';
+  var VERSION = '2.5';
   var FORMAT = 'btcwalk', PFORMAT = 'btcproject';
 
   // ---------- the demo job (generic) ----------
@@ -278,7 +278,8 @@
   // Several photos on a line (1.9): e.photos; older lines have one e.photo.
   function pics(e) { return e && e.photos && e.photos.length ? e.photos : e && e.photo ? [e.photo] : []; }
   var MAXPICS = 10;
-  function picsHtml(ps) { return ps.length ? '<span class="e-ph n' + Math.min(ps.length, 3) + '">' + ps.map(function (p, i) { return '<img src="' + p + '" alt="Photo ' + (i + 1) + '">'; }).join('') + '</span>' : ''; }
+  // a line's photos (2.5): tap one to see it full screen (swipe for the rest); tapping the words still edits the line
+  function picsHtml(ps, id) { return ps.length ? '<span class="e-ph n' + Math.min(ps.length, 3) + '">' + ps.map(function (p, i) { return '<img src="' + p + '" alt="Photo ' + (i + 1) + '"' + (id ? ' data-lph="' + esc(id) + '|' + i + '"' : '') + '>'; }).join('') + '</span>' : ''; }
   function fmtH(h) { return h >= 1 ? (Math.round(h * 10) / 10) + ' h' : Math.round(h * 60) + ' min'; }
   function whoTxt(w) { return String(w || '').split(/\s+/).filter(Boolean).map(function (h) { return '@' + h; }).join(' '); }
   function itpHead(e) { return 'ITP · ' + (e.itp && e.line ? esc(e.itp) + ' ' + esc(e.line) : 'TO SORT ON THE PC'); }
@@ -291,7 +292,7 @@
     var ed = S.edit === e.id;
     return '<button type="button" class="e ' + e.type + (ed ? ' ed' : '') + (S.fresh === e.id ? ' new' : '') + '" data-e="' + esc(e.id) + '"><span class="e-h"><span class="e-k">' + (ed ? PEN : '') + head + '</span><span>' + hm(e.time) + (e.shipped ? ' ✓' : '') + '</span></span>' +
       (e.text ? '<span class="e-t">' + mark(e.text) + '</span>' : '') + (e.type === 'flowon' ? (e.action ? '<span class="e-a">→ ' + mark(e.action) + '</span>' : '<span class="e-none">⚠ No action yet · tap to add</span>') : '') +
-      (meta ? '<span class="e-m">' + meta + '</span>' : '') + picsHtml(pics(e)) + '</button>';
+      (meta ? '<span class="e-m">' + meta + '</span>' : '') + picsHtml(pics(e), e.id) + '</button>';
   }
   var PEN = '<svg class="pen" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg>';
   var BIN = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg>';
@@ -333,7 +334,7 @@
       '<div class="chat" id="chat">' + (q ? '' : dayHead(d, es)) + (q && shown.length < es.length ? '<span class="note-c">' + (es.length - shown.length) + ' lines hidden · tap one to see it in the chat</span>' : '') +
       (shown.length ? withPlaces(shown, q) : '<div class="empty">' + (q ? 'Nothing matches.' : 'Type below: a note, a photo, a clash (<b>what changed ; what next</b>) or an action (<b>@person</b>, <b>P1</b>, <b>fri</b>). <b>at SBR 1</b> says where you are.') + '</div>') + '</div>' +
       (loc ? '<div class="loc"><span class="l">At</span><b>' + esc(loc) + '</b><button type="button" data-act="unloc" aria-label="Clear where you are">×</button></div>' : '') +
-      '<div class="comp"><div class="reads" id="reads"></div><div class="sug" id="sug"></div>' + (S.photos.length ? '<div class="thumbs">' + S.photos.map(function (p, i) { return '<span class="thumb"><img src="' + p + '" alt="Photo ' + (i + 1) + '"><button type="button" data-act="nophoto" data-i="' + i + '" aria-label="Remove photo ' + (i + 1) + '">×</button></span>'; }).join('') + '<span class="thumbs-t">' + S.photos.length + ' photo' + (S.photos.length === 1 ? '' : 's') + (S.edit ? ' on this line' : ' go with the next line') + '</span></div>' : '') +
+      '<div class="comp"><div class="reads" id="reads"></div><div class="sug" id="sug"></div>' + (S.photos.length ? '<div class="thumbs">' + S.photos.map(function (p, i) { return '<button type="button" class="thumb" data-tph="' + i + '" aria-label="Photo ' + (i + 1) + ': see it, or take it off"><img src="' + p + '" alt=""></button>'; }).join('') + '<span class="thumbs-t">' + S.photos.length + ' photo' + (S.photos.length === 1 ? '' : 's') + (S.edit ? ' on this line' : ' go with the next line') + '</span></div>' : '') +
       (S.edit ? pinHtml() : '') + '<div class="comp-row"><button type="button" class="cam" data-act="photo" aria-label="Add a photo"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="6" width="18" height="14" rx="2"/><circle cx="12" cy="13" r="3.5"/><path d="M9 6l1.5-2h3L15 6"/></svg></button><button type="button" class="cam" data-act="pics" aria-label="Add photos from the phone"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-8 8"/></svg></button>' +
       '<textarea id="box" rows="1" placeholder="Log it…" aria-label="Write a line" enterkeyhint="send"></textarea><button type="button" class="send" id="send" data-act="send" aria-label="' + (S.edit ? 'Save' : 'Send') + '">' + (S.edit ? 'Save' : 'Send') + (S.edit ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>' : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg>') + '</button></div></div>';
     var box = $('box');
@@ -653,16 +654,26 @@
     }
     main.innerHTML = '<div class="dhead">' + '<button type="button" class="icon" data-act="back" aria-label="Back"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>' + head + '</div><div class="scroll"><div class="pad">' + html + '</div></div>';
   }
+  // Full screen (2.5): the Evidence photos, a line's photos, or the photos going with the line you're writing (S.viewBin:
+  // a bin to take one off, with Undo). Tap the sides or swipe for the next and previous.
   function viewer(i) {
     var ps = S.evPhotos || [], p = ps[i]; if (!p) return; S.viewAt = i;
-    var v = $('viewer'); if (!v) { v = document.createElement('div'); v.id = 'viewer'; document.body.appendChild(v); }
+    var v = $('viewer'); if (!v) { v = document.createElement('div'); v.id = 'viewer'; document.body.appendChild(v); swipeOn(v); }
     v.className = 'viewer'; v.hidden = false;
+    var e = p.e || {}, sub = [e.itp ? (e.itp + ' ' + (e.line || '')).trim() : '', e.day ? dayLabel(e.day) + ' ' + hm(e.time) : '', ps.length > 1 ? (i + 1) + ' of ' + ps.length : ''].filter(Boolean).join(' · ');
     v.innerHTML = '<img src="' + p.src + '" alt="Photo ' + (i + 1) + ' of ' + ps.length + '"><button type="button" class="vn p" data-act="vprev" aria-label="Previous photo"></button><button type="button" class="vn n" data-act="vnext" aria-label="Next photo"></button>' +
-      '<div class="vcap">' + esc(p.e.text || '') + '<small>' + esc((p.e.itp || '') + ' ' + (p.e.line || '')) + ' · ' + esc(dayLabel(p.e.day)) + ' ' + hm(p.e.time) + ' · ' + (i + 1) + ' of ' + ps.length + '</small></div><button type="button" class="vx" data-act="vclose" aria-label="Close">×</button>';
+      '<div class="vcap">' + esc(e.text || '') + (sub ? '<small>' + esc(sub) + '</small>' : '') + '</div><button type="button" class="vx" data-act="vclose" aria-label="Close">×</button>' +
+      (S.viewBin ? '<button type="button" class="vbin" data-act="vbin" aria-label="Take this photo off the line">' + BIN + '<span>Take off</span></button>' : '');
     sync();
   }
+  function swipeOn(v) {
+    var x0 = null;
+    v.addEventListener('touchstart', function (ev) { x0 = ev.touches.length === 1 ? ev.touches[0].clientX : null; }, { passive: true });
+    v.addEventListener('touchend', function (ev) { if (x0 == null) return; var dx = ev.changedTouches[0].clientX - x0, n = (S.evPhotos || []).length; x0 = null; if (Math.abs(dx) > 50 && n > 1) viewer((S.viewAt + (dx < 0 ? 1 : n - 1)) % n); }, { passive: true });
+  }
+  function showPhotos(list, i, bin) { S.evPhotos = list; S.viewBin = !!bin; viewer(i || 0); }
   function viewerOpen() { var v = $('viewer'); return !!(v && !v.hidden); }
-  function closeViewer() { var v = $('viewer'); if (v) { v.hidden = true; v.innerHTML = ''; } sync(); }
+  function closeViewer() { var v = $('viewer'); if (v) { v.hidden = true; v.innerHTML = ''; } S.viewBin = false; sync(); }
   async function shareEvidence() {
     var ps = S.evPhotos || []; if (!ps.length) return;
     var files = ps.map(function (p, i) { var b = atob(p.src.split(',')[1] || ''), a = new Uint8Array(b.length); for (var k = 0; k < b.length; k++) a[k] = b.charCodeAt(k); return new File([a], (S.evItp + ' ' + S.evLine + ' ' + (i + 1)).replace(/[^A-Za-z0-9 .-]+/g, '') + '.jpg', { type: 'image/jpeg' }); });
@@ -945,7 +956,13 @@
     if (t && t.dataset.ins != null) { var bi = $('box'); if (!bi) return; var cur = bi.value; bi.value = /^\w+\.$/.test(t.dataset.ins.trim()) ? t.dataset.ins + cur.replace(/^\s+/, '') : cur.replace(/\s*$/, '') + (cur.trim() ? ' ' : '') + t.dataset.ins.replace(/^\s+/, ''); S.draft = bi.value; bi.focus(); bi.setSelectionRange(bi.value.length, bi.value.length); grow(); reads(); buzz(4); return; }
     if (t && t.dataset.ev) { S.evItp = t.dataset.ev; S.evLine = null; renderEvidence(); slide('fwd'); sync(); return; }
     if (t && t.dataset.evl) { S.evLine = S.evLine === t.dataset.evl ? null : t.dataset.evl; renderEvidence(); return; }
-    if (t && t.dataset.ph != null) { viewer(+t.dataset.ph); return; }
+    if (t && t.dataset.ph != null) { S.viewBin = false; viewer(+t.dataset.ph); return; }
+    var lph = ev.target.closest && ev.target.closest('[data-lph]');
+    if (lph && !(S.edit && lph.closest('[data-e="' + S.edit + '"]'))) {   // a line's photo: full screen, not edit
+      var lp = lph.dataset.lph.split('|'), le = S.entries.filter(function (x) { return x.id === lp[0]; })[0];
+      if (le) { ev.preventDefault(); showPhotos(pics(le).map(function (src) { return { src: src, e: le }; }), +lp[1]); return; }
+    }
+    if (t && t.dataset.tph != null) { showPhotos(S.photos.map(function (src) { return { src: src, e: {} }; }), +t.dataset.tph, true); return; }
     if (!t) { if (ev.target.id === 'sheet') closeSheet(); return; }
     if (t.id === 'more' || t.id === 'proj') { settings(); return; }
     if (t.id === 'find') { S.view = S.view === 'findall' ? 'days' : 'findall'; render(); return; }
@@ -993,6 +1010,11 @@
     else if (act === 'photo') $('photo-in').click();   // the camera, straight away
     else if (act === 'pics') $('pics-in').click();     // several from the phone's photos (1.9)
     else if (act === 'nophoto') { S.photos.splice(+t.dataset.i || 0, 1); renderDay(); }
+    else if (act === 'vbin') {   // take a photo off the line you're writing (2.5), with Undo
+      var bi2 = S.viewAt, gone = S.photos[bi2]; if (gone == null) return;
+      S.photos.splice(bi2, 1); history.back(); renderDay(); buzz(8);
+      toast('Photo taken off', false, { label: 'Undo', fn: function () { S.photos.splice(Math.min(bi2, S.photos.length), 0, gone); if (S.view === 'day') renderDay(); } });
+    }
     else if (act === 'findday') { S.findOpen = !S.findOpen; if (!S.findOpen) S.find = ''; renderDay(); var fd = $('find-day'); if (fd) fd.focus(); }
     else if (act === 'flip') { var bf = $('box'); if (bf) { bf.value = flipText(bf.value); S.draft = bf.value; bf.focus(); reads(); } }
     else if (act === 'as') { var cur = $('box') ? (S.as || parse($('box').value, S.day).type) : 'note'; S.as = CYCLE[(CYCLE.indexOf(cur) + 1) % CYCLE.length]; reads(); }
