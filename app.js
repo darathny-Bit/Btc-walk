@@ -6,14 +6,14 @@
    (⋮ › Load project). No server, nothing sent anywhere else. */
 'use strict';
 (function () {
-  var VERSION = '2.8';
+  var VERSION = '2.9';
   var FORMAT = 'btcwalk', PFORMAT = 'btcproject';
 
   // ---------- the demo job (generic) ----------
   var DEMO = {
     format: PFORMAT, v: 1, made: null, demo: true,
     project: { id: 'demo-dragon', code: 'DRAGON', name: 'Dragon WWTP (demo)' },
-    people: [{ name: 'Sam Rivers', handle: 'SR', team: true }, { name: 'Alex Kerr', handle: 'AK', team: true }, { name: 'Nikau Hale', handle: 'NH', team: true }, { name: 'Jo Tamati', handle: 'JT', team: true }, { name: 'Pat Lee', handle: 'PL', team: false }],
+    people: [{ name: 'Sam Rivers', handle: 'SR', team: true, role: 'Commissioning Manager' }, { name: 'Alex Kerr', handle: 'AK', team: true, role: 'Lead Commissioning Engineer' }, { name: 'Nikau Hale', handle: 'NH', team: true, role: 'Commissioning Engineer' }, { name: 'Jo Tamati', handle: 'JT', team: true, role: 'Automation Engineer' }, { name: 'Pat Lee', handle: 'PL', team: false }],
     parties: [{ name: 'Beca', contact: 'Pat Lee', role: 'Engineer' }, { name: 'DDC', contact: '', role: 'Client' }],
     areas: [
       { name: 'Inlet works', itps: [{ code: 'ITP-01', title: 'Inlet screens', lines: [{ no: '2.1', text: 'Screen frame set out' }, { no: '2.2', text: 'Screen installed and levelled' }, { no: '3.1', text: 'Wash press wired' }] },
@@ -273,7 +273,8 @@
     if (!ds.length) html += '<div class="empty"><b>Nothing logged yet.</b><br>Start the day and type: a note, a photo, a clash (<b>what changed ; what next</b>) or an action (<b>@person</b>). A day you don’t log anything has no card.</div>';
     var hasT = ds.some(function (d) { return d.day === t; });
     main.innerHTML = '<div class="scroll"><div class="pad">' + html + '</div></div><div class="foot"><button type="button" class="btn primary" data-act="today">' + (hasT ? 'Open today' : '＋ Start day') + '</button>' +
-      '<button type="button" class="btn ship' + (waiting.length ? '' : ' done') + '" data-act="ship">Ship' + (waiting.length ? '<span class="count">' + waiting.length + '</span>' : '') + '</button></div>';
+      (hasT && !(S.closed || {})[t] ? '<button type="button" class="btn ship" data-act="closeday">Close the day</button></div>'
+        : '<button type="button" class="btn ship' + (waiting.length ? '' : ' done') + '" data-act="ship">' + (hasT && (S.closed || {})[t] ? 'Closed' : 'Ship') + (waiting.length ? '<span class="count">' + waiting.length + '</span>' : '') + '</button></div>');
     wxNow().then(function (h) { var sl = $('wxnow'); if (sl && S.view === 'days') sl.innerHTML = h; });
   }
 
@@ -568,7 +569,7 @@
     var who = {}; es.forEach(function (e) { if (e.type === 'action') String(e.who || 'you').split(/\s+/).forEach(function (h) { who[S.me && h === S.me.handle ? 'you' : h] = 1; }); });
     var row = function (col, label, sub, n) { return n ? '<div><span class="dotl" style="background:' + col + '"></span><span class="lt"><b>' + label + '</b>' + (sub ? '<span>' + esc(sub) + '</span>' : '') + '</span><span class="rv">' + n + '</span></div>' : ''; };
     sheet('<div class="grip"></div><div class="shipped"><div class="tickc"><svg width="54" height="54" viewBox="0 0 52 52" role="img" aria-label="Shipped"><circle class="ring-d" cx="26" cy="26" r="23" fill="none" stroke="#D4FF3A" stroke-width="3"/><path class="tick-d" d="M15 27l7 7 15-16" fill="none" stroke="#D4FF3A" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>' +
-      '<h2>Shipped</h2><p>' + (pick.length === 1 ? (pick[0].day === today() ? 'Today' : esc(dayLabel(pick[0].day))) + ' is' : pick.length + ' days are') + ' on the way to BTC.<br>It lands in your diary on the PC, and stays on this phone too.</p></div>' +
+      '<h2>' + (S.justClosed ? 'Day closed' : 'Shipped') + '</h2><p>' + (S.justClosed ? 'Signed and on the way to BTC' + (S.justClosed.reviewer ? ', where ' + esc(S.justClosed.reviewer) + ' gets it to review and sign' : '') + '.<br>' : '') + (pick.length === 1 ? (pick[0].day === today() ? 'Today' : esc(dayLabel(pick[0].day))) + ' is' : pick.length + ' days are') + ' on the way to BTC.<br>It lands in your diary on the PC, and stays on this phone too.</p></div>' +
       '<div class="list">' + row('var(--note)', 'Notes', '', c.note) + row('var(--itp)', 'ITP evidence', evp ? evp + ' photo' + (evp === 1 ? '' : 's') + (lines.length ? ' → ' + lines.slice(0, 2).join(', ') + (lines.length > 2 ? '…' : '') : ' to sort on the PC') : '', c.itp) +
       row('var(--flow)', 'Clashes', 'to Build’s register', c.flowon) + row('var(--act)', 'Actions', 'cards for ' + Object.keys(who).join(', '), c.action) + '</div>' +
       '<button type="button" class="btn primary" data-act="closesheet" style="min-height:54px">Done</button>');
@@ -579,7 +580,8 @@
     return code + '_' + (S.me ? S.me.handle : 'X') + '_' + (days[days.length - 1] || today()) + (days.length > 1 ? '_' + days.length + 'days' : '') + '_' + hhmm + '.btcwalk.txt';
   }
   async function doShip() {
-    var pick = daysOf().filter(function (d) { return d.unshipped && S.shipPick && S.shipPick[d.day]; });
+    var CL = S.closeReq || null;
+    var pick = daysOf().filter(function (d) { return (d.unshipped || (CL && d.day === CL.date)) && S.shipPick && S.shipPick[d.day]; });
     if (!pick.length) return;
     var es = [], pickDays = {}; pick.forEach(function (d) { es = es.concat(d.entries); pickDays[d.day] = true; });
     var gone = (S.gone || []).filter(function (g) { return pickDays[g.day]; });
@@ -589,6 +591,7 @@
     // and plain text is one it always takes. BTC reads .btcwalk and .btcwalk.txt alike.
     var wx = {}; for (var wi = 0; wi < pick.length; wi++) { var fc = await wxForecast(pick[wi].day), st0 = await wxStart(pick[wi].day); if (fc || st0) wx[pick[wi].day] = Object.assign({}, fc || { day: pick[wi].day, source: 'MET Norway', hours: {} }, st0 ? { start: st0 } : {}); }
     if (Object.keys(wx).length) body.weather = wx;
+    if (CL) body.close = { date: CL.date, at: CL.at, sig: CL.sig, title: CL.title, reviewer: CL.reviewer };   // Close the day (2.9): signed here
     var dn = (S.packDone || []).filter(function (d) { return !d.sent; }); if (dn.length) body.actionsDone = dn.map(function (d) { return { id: d.id, file: d.file, at: d.at }; });   // ticked on site (2.8)
     var np2 = (S.newParties || []).filter(function (x) { return !(S.proj.parties || []).some(function (y) { return key(y.name) === key(x.name); }); });
     if (np2.length) body.parties = np2.map(function (x) { return { name: x.name, role: x.role || '', contact: x.contact || '' }; });   // new to BTC (2.4)   // the forecast BTC needs to draw the job's weather (2.1); logged weather goes as lines
@@ -606,6 +609,7 @@
     }
     if (!shared) return;
     var at = new Date().toISOString();
+    if (CL) { S.closed = Object.assign({}, S.closed || {}); S.closed[CL.date] = CL.at; await kvSet('closed:' + S.proj.project.id, S.closed); if (CL.reviewer) await kvSet('reviewer:' + S.proj.project.id, CL.reviewer); S.closeReq = null; }
     for (var i = 0; i < es.length; i++) { es[i].shipped = true; es[i].shippedAt = at; await putEntry(es[i]); }
     for (var wd in wx) await kvSet('wxsent:' + S.proj.project.id + ':' + wd, wx[wd].at || at);   // BTC has this day's weather now (2.7)
     if (dn.length) { S.packDone = (S.packDone || []).map(function (d) { return d.sent ? d : Object.assign({}, d, { sent: at }); }); await kvSet('packDone:' + S.proj.project.id, S.packDone); }
@@ -613,7 +617,71 @@
     if (gone.length) { S.gone = (S.gone || []).filter(function (g) { return !pickDays[g.day]; }); await kvSet('gone:' + S.proj.project.id, S.gone); }
     S.shipPick = null; buzz([12, 60, 12]); S.view = 'days'; render();
     if (shared === 'saved') { closeSheet(); toast('The phone wouldn’t share it, so it’s in Downloads: attach ' + name + ' to an email to ship it.', true); return; }
-    shippedSheet(pick, es);
+    shippedSheet(pick, es); S.justClosed = null;
+  }
+
+
+  // ---------- close the day (2.9): see the page, sign it, pick a reviewer, send ----------
+  // The signature stays on this phone (kv 'sig'); a copy goes with the day it signs. Draw it with a finger, or take a
+  // photo of it on paper: the paper turns clear and it's cropped to the ink (the same as BTC's team signatures).
+  function myPerson() { return (S.proj.people || []).filter(function (p) { return S.me && p.handle === S.me.handle; })[0] || {}; }
+  async function closeDaySheet(day) {
+    day = day || today();
+    var last = (await kvGet('reviewer:' + S.proj.project.id)) || '', ps = (S.proj.people || []).filter(function (p) { return p.team !== false && !(S.me && p.handle === S.me.handle); });
+    var es = S.entries.filter(function (e) { return e.day === day && e.type !== 'weather'; }), c = counts(es), role = myPerson().role || '';
+    sheet('<div class="grip"></div><h2>Close the day</h2><p>' + esc(dayLabel(day)) + ' · ' + es.length + ' line' + (es.length === 1 ? '' : 's') + (c.photo ? ' · ' + c.photo + ' photo' + (c.photo === 1 ? '' : 's') : '') + '</p>' +
+      '<div class="list"><button type="button" data-act="closeprev" data-v="' + day + '"><span class="lt"><b>See the page</b><span>The day as it prints, weather on top</span></span></button></div>' +
+      '<div class="sigrow">' + (S.sig ? '<img src="' + S.sig + '" alt="Your signature">' : '<span class="nosig">No signature yet</span>') + '<span class="lt"><b>' + esc(S.me ? S.me.name : '') + '</b><span>' + esc(role || 'Prepared by') + '</span></span><button type="button" class="btn" data-act="sigset" style="min-height:40px">' + (S.sig ? 'Change' : 'Add') + '</button></div>' +
+      '<label class="fld"><span>Reviewer</span><select id="cl-rev"><option value="">Nobody, just sign</option>' + ps.map(function (p) { return '<option value="' + esc(p.handle) + '"' + (p.handle === last ? ' selected' : '') + '>' + esc(p.name + (p.role ? ' · ' + p.role : '')) + '</option>'; }).join('') + '</select></label>' +
+      '<button type="button" class="btn primary" data-act="doclose" data-v="' + day + '" style="min-height:56px;font-size:17px"' + (S.sig ? '' : ' disabled') + '>Sign and close the day</button>');
+  }
+  async function doClose(day) {
+    if (!S.sig) { sigSheet(); return; }
+    var sel = $('cl-rev'), rv = sel ? sel.value : '', rp = (S.proj.people || []).filter(function (p) { return p.handle === rv; })[0];
+    S.closeReq = { date: day, at: new Date().toISOString(), sig: S.sig, title: myPerson().role || '', reviewer: rv };
+    S.justClosed = { reviewer: rp ? rp.name : '' };
+    S.shipPick = {}; daysOf().forEach(function (d) { if (d.unshipped || d.day === day) S.shipPick[d.day] = true; });
+    await doShip();
+    if (S.closeReq) { S.closeReq = null; S.justClosed = null; }   // not sent: nothing changes
+  }
+  function sigSheet() {
+    sheet('<div class="grip"></div><h2>Your signature</h2><p>Kept on this phone. It goes on a day only when you close it.</p>' +
+      (S.sig ? '<div class="sigrow"><img src="' + S.sig + '" alt="Your signature"><span class="lt"><b>Your signature now</b></span></div>' : '') +
+      '<canvas id="sig-pad" width="900" height="300" class="sigpad" aria-label="Draw your signature here"></canvas>' +
+      '<div class="row2"><button type="button" class="btn" data-act="sigclear">Clear</button><button type="button" class="btn" data-act="sigphoto">Photo of it on paper</button></div>' +
+      '<input type="file" accept="image/*" capture="environment" id="sig-in" hidden>' +
+      '<button type="button" class="btn primary" data-act="sigsave" style="min-height:54px">Use what I drew</button>');
+    var cv = $('sig-pad'), x = cv.getContext('2d'), down = false, last = null; S.sigInked = false;
+    x.lineWidth = 6; x.lineCap = 'round'; x.lineJoin = 'round'; x.strokeStyle = '#142050';
+    var at = function (e) { var b = cv.getBoundingClientRect(); return [(e.clientX - b.left) * cv.width / b.width, (e.clientY - b.top) * cv.height / b.height]; };
+    cv.onpointerdown = function (e) { down = true; last = at(e); cv.setPointerCapture(e.pointerId); e.preventDefault(); };
+    cv.onpointermove = function (e) { if (!down) return; var q = at(e); x.beginPath(); x.moveTo(last[0], last[1]); x.lineTo(q[0], q[1]); x.stroke(); last = q; S.sigInked = true; };
+    cv.onpointerup = cv.onpointercancel = function () { down = false; };
+    $('sig-in').onchange = async function () { var f = this.files && this.files[0]; if (!f) return; try { S.sig = await inkFromFile(f); await kvSet('sig', S.sig); toast('Signature saved.'); sigSheet(); } catch (e) { toast(e.message, true); } };
+  }
+  // keep in step with BTC's topbar.js inkOnly (2.37)
+  function inkOnly(c) {
+    var x = c.getContext('2d'), im = x.getImageData(0, 0, c.width, c.height), d = im.data, minX = c.width, minY = c.height, maxX = -1, maxY = -1;
+    for (var i = 0; i < d.length; i += 4) {
+      var l = 0.3 * d[i] + 0.59 * d[i + 1] + 0.11 * d[i + 2], k = (i / 4);
+      if (d[i + 3] < 10 || l > 165) { d[i + 3] = 0; continue; }
+      d[i + 3] = Math.min(255, Math.round((165 - l) * 2.2)); d[i] = 20; d[i + 1] = 32; d[i + 2] = 80;
+      var px = k % c.width, py = (k - px) / c.width; if (px < minX) minX = px; if (px > maxX) maxX = px; if (py < minY) minY = py; if (py > maxY) maxY = py;
+    }
+    x.putImageData(im, 0, 0);
+    if (maxX < 0) throw new Error('No signature found: sign on white paper with a dark pen, and fill the photo with it.');
+    var pd = 6, w = Math.min(c.width, maxX - minX + 1 + 2 * pd), h = Math.min(c.height, maxY - minY + 1 + 2 * pd), o = document.createElement('canvas'), k2 = Math.min(1, 600 / w, 200 / h);
+    o.width = Math.max(1, Math.round(w * k2)); o.height = Math.max(1, Math.round(h * k2));
+    o.getContext('2d').drawImage(c, Math.max(0, minX - pd), Math.max(0, minY - pd), w, h, 0, 0, o.width, o.height);
+    return o.toDataURL('image/png');
+  }
+  function inkFromFile(file) {
+    return new Promise(function (res, rej) {
+      var img = new Image(), u = URL.createObjectURL(file);
+      img.onerror = function () { rej(new Error('That isn’t a picture.')); };
+      img.onload = function () { var k = Math.min(1, 1600 / img.width, 1000 / img.height), c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k); c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(u); try { res(inkOnly(c)); } catch (e) { rej(e); } };
+      img.src = u;
+    });
   }
 
   // ---------- project, you, settings ----------
@@ -638,6 +706,8 @@
     var p = S.proj, made = p.made ? dayLabel(p.made.slice(0, 10)) : '', n = S.entries.length;
     sheet('<div class="grip"></div><h2>' + esc(p.project.name) + '</h2>' +
       '<div class="list"><button type="button" data-act="load"><span class="lt"><b>Load project…</b><span>' + (p.demo ? 'The demo is loaded. Pick the file Build makes: ⋮ › Phone project file…' : 'Project file from ' + esc(made || '?') + '. Pick a newer one when the job changes.') + '</span></span></button>' +
+      '<button type="button" data-act="sendnow"><span class="lt"><b>Send now, without closing</b><span>Part-way through the day: photos and actions reach BTC now</span></span></button>' +
+      '<button type="button" data-act="sigset"><span class="lt"><b>Your signature: ' + (S.sig ? 'set' : 'not set') + '</b><span>Draw it, or a photo of it on paper</span></span></button>' +
       '<button type="button" data-act="me"><span class="lt"><b>You: ' + esc(S.me ? S.me.name : 'not picked') + '</b><span>Whose diary your days go into</span></span></button>' +
       (p.demo ? '' : '<button type="button" data-act="pkset"><span class="lt"><b>Your actions: ' + (S.packCfg && S.packCfg.key ? 'on' : 'off') + '</b><span>Your open actions and chases from BTC</span></span></button>') +
       '<button type="button" data-act="wxset"><span class="lt"><b>Weather: ' + (wxOn() ? 'on' : 'off') + '</b><span>' + (wxOn() ? 'Forecast from MET Norway' + (siteLoc() ? '' : ' · set the site location') : 'Fill in each day’s weather from MET Norway') + '</span></span></button>' +
@@ -764,26 +834,40 @@
     var wx = [st && st.sum ? 'Forecast at ' + (/^\d{1,2}:\d{2}$/.test(String(st.at)) ? st.at : hm(st.at)) + ': ' + st.sum : '', wl.map(function (e) { return 'Logged ' + hm(e.time) + ': ' + (wxWords(e.wx) || e.text); }).join(' · ')].filter(Boolean);
     var c = counts(es), lost = lines.filter(function (e) { return e.type === 'delay'; }).reduce(function (t, e) { return t + (+e.lost || 0); }, 0);
     var tot = [lines.length + ' line' + (lines.length === 1 ? '' : 's'), c.photo ? c.photo + ' photo' + (c.photo === 1 ? '' : 's') : '', c.flowon ? c.flowon + ' clash' + (c.flowon === 1 ? '' : 'es') : '', c.action ? c.action + ' action' + (c.action === 1 ? '' : 's') : '', lost ? fmtH(lost) + ' lost' : ''].filter(Boolean).join(' · ');
-    var last = null, body = lines.map(function (e) {
-      var p = placeOf(e), h = '';
-      if (p && p !== last) h = '<div class="pp-place">at ' + esc(p) + '</div>';
-      last = p;
+    // the page (2.9, the same design as BTC's compiled diary): weather band, the day in numbers, lines by place with each
+    // line's photos under it as P1, P2…, the sign-off with your signature once the day is closed, then the photos full size
+    var pno = 0, numbered = [], other = [], last = null, crewN = 0;
+    lines.filter(function (e) { return e.type === 'crew'; }).forEach(function (e) { (e.crew || []).forEach(function (x) { crewN += +x.n || 0; }); });
+    var body = lines.map(function (e) {
+      var pl = placeOf(e), h = '', ps = pics(e);
+      if (!e.text && ps.length && e.type === 'note') { ps.forEach(function (x) { other.push({ src: x, cap: hm(e.time) + (pl ? ' · ' + pl : '') }); }); return ''; }
+      if (pl !== last) h = '<div class="pp-place">' + esc(pl || 'Around site') + '</div>';
+      last = pl;
       var ref = [e.itp && e.line ? e.itp + ' ' + e.line : '', e.who ? whoTxt(e.who) : '', e.party ? (e.dir === 'ours' ? '↙ from ' : '↗ chase ') + e.party : '', e.priority || '', e.due ? 'due ' + dayLabel(e.due) : '', e.type === 'delay' && e.lost ? fmtH(e.lost) + ' lost' : ''].filter(Boolean).join(' · ');
-      var ps = pics(e);
-      return h + '<div class="pp-l"><span class="pp-t">' + hm(e.time) + '</span><span class="pp-k k-' + esc(e.type) + '">' + esc(TAG[e.type] || 'Note') + '</span><div class="pp-b"><div>' + esc(e.text || (ps.length ? '' : '–')) + (e.action ? ' <b>→ ' + esc(e.action) + '</b>' : '') + (e.was ? ' <i>(amended; was: ' + esc(e.was) + ')</i>' : '') + '</div>' +
-        (ref ? '<div class="pp-r">' + esc(ref) + '</div>' : '') + (ps.length ? '<div class="pp-ph">' + ps.map(function (x) { return '<img src="' + x + '" alt="">'; }).join('') + '</div>' : '') + '</div></div>';
+      var nums = ps.map(function (x) { pno++; numbered.push({ n: 'P' + pno, src: x, cap: hm(e.time) + (pl ? ' · ' + pl : '') + ' · ' + (TAG[e.type] || 'Note') + (e.text ? ': ' + e.text : '') }); return { n: 'P' + pno, src: x }; });
+      var see = nums.length ? ' <b class="pp-see">see ' + nums[0].n + (nums.length > 1 ? '–' + nums[nums.length - 1].n : '') + '</b>' : '';
+      return h + '<div class="pp-l"><span class="pp-t">' + hm(e.time) + '</span><span class="pp-k k-' + esc(e.type) + '">' + esc(TAG[e.type] || 'Note') + '</span><div class="pp-b"><div>' + esc(e.text || '–') + (e.action ? ' <b>→ ' + esc(e.action) + '</b>' : '') + (e.was ? ' <i>(amended; was: ' + esc(e.was) + ')</i>' : '') + see + '</div>' +
+        (ref ? '<div class="pp-r">' + esc(ref) + '</div>' : '') + (nums.length ? '<div class="pp-th">' + nums.map(function (x) { return '<span><img src="' + x.src + '" alt=""><b>' + x.n + '</b></span>'; }).join('') + '</div>' : '') + '</div></div>';
     }).join('');
-    var raised = lines.filter(function (e) { return e.type === 'flowon' || e.type === 'action'; });
-    var html = '<div class="paper"><header class="pp-h"><div class="pp-kick">Site diary</div><h1>' + esc(dayLabel(d)) + '</h1><div class="pp-job">' + esc(S.proj.project.name || '') + ' · ' + esc(S.me ? S.me.name : '') + '</div></header>' +
-      (wx.length ? '<div class="pp-wx">' + wx.map(esc).join('<br>') + '</div>' : '') + '<div class="pp-tot">' + esc(tot) + '</div>' +
-      (body || '<p class="pp-none">No commissioning activities recorded.</p>') +
-      (raised.length ? '<h2>Clashes and actions raised</h2><ul class="pp-ra">' + raised.map(function (e) { return '<li><b>' + (e.type === 'flowon' ? 'Clash' : 'Action') + '</b> ' + esc(e.text) + (e.action ? ' → ' + esc(e.action) : '') + (e.type === 'action' ? ' <span>(' + esc(e.who ? whoTxt(e.who) : S.me ? '@' + S.me.handle : 'you') + (e.party ? ', ' + (e.dir === 'ours' ? 'from ' : 'chase ') + esc(e.party) : '') + (e.due ? ', due ' + esc(dayLabel(e.due)) : '') + ')</span>' : '') + '</li>'; }).join('') + '</ul>' : '') +
-      '<div class="pp-sign"><div><span>Recorded by</span><b>' + esc(S.me ? S.me.name : '') + '</b></div><div><span>Signed</span><b>&nbsp;</b></div><div><span>Date</span><b>&nbsp;</b></div></div>' +
+    var times = lines.map(function (e) { return hm(e.time); }).sort(), me = myPerson(), closed = (S.closed || {})[d];
+    var parts = st && st.sum ? String(st.sum).split(' · ') : [];
+    var wxb = st || wl.length ? '<div class="pp-wx2"><b>' + esc(parts[0] || (wl[0] ? wxWords(wl[0].wx) || wl[0].text : '')) + '</b>' + (parts.length > 1 ? '<span class="pp-ws">' + parts.slice(1).map(esc).join(' · ') + '</span>' : '') +
+      '<small>' + (st ? 'Forecast at ' + esc(/^\d{1,2}:\d{2}$/.test(String(st.at)) ? st.at : hm(st.at)) + ' · MET Norway' : 'Logged on site') + '</small>' +
+      (wl.length ? '<div class="pp-wl">' + wl.map(function (e) { return '<span><b>' + hm(e.time) + '</b> ' + esc(wxWords(e.wx) || e.text) + '</span>'; }).join('') + '</div>' : '') + '</div>' : '<div class="pp-wx2 none"><b>No weather recorded</b></div>';
+    var tile = function (n, l) { return '<div><b>' + esc(n) + '</b><span>' + esc(l) + '</span></div>'; };
+    var numsH = '<div class="pp-nums">' + tile(times[0] || '–', 'on site') + tile(times.length ? times[times.length - 1] : '–', 'off site') + tile(crewN || '–', 'crew') + tile(lost ? fmtH(lost) : '0', 'lost time') + tile(c.flowon, 'clashes') + tile(c.action, 'actions') + tile(lines.filter(function (e) { return e.type === 'instruction'; }).length, 'instructions') + tile(c.photo, 'photos') + '</div>';
+    var sgn = '<div class="pp-sgs"><div class="pp-sg"><span class="k">Prepared by</span>' + (closed && S.sig ? '<img src="' + S.sig + '" alt="Signature">' : '<span class="ln"></span>') + '<b>' + esc(S.me ? S.me.name : '') + '</b><span>' + esc(me.role || '') + '</span><span class="dt">' + (closed ? esc(dayLabel(String(closed).slice(0, 10)) + ', ' + hm(closed)) : 'Date') + '</span></div>' +
+      '<div class="pp-sg"><span class="k">Reviewed by</span><span class="ln"></span><span>Name</span><span class="dt">Date</span></div></div>';
+    var html = '<div class="paper"><header class="pp-h"><div class="pp-kick">Site diary</div><h1>' + esc(dayLabel(d)) + '</h1><div class="pp-job">' + esc(S.proj.project.name || '') + ' · ' + esc(S.me ? S.me.name : '') + (me.role ? ' · ' + esc(me.role) : '') + '</div></header>' +
+      wxb + numsH + (body || '<p class="pp-none">No commissioning activities recorded.</p>') +
+      (numbered.length ? '<p class="pp-note">' + (numbered.length === 1 ? 'P1 is' : 'P1–P' + numbered.length + ' are') + ' printed full size after the sign-off.</p>' : '') + sgn +
+      (numbered.length || other.length ? '<div class="pp-photos"><h2>Photos</h2>' + numbered.map(function (x) { return '<figure><span><img src="' + x.src + '" alt=""><b>' + x.n + '</b></span><figcaption><b>' + x.n + '</b> · ' + esc(x.cap) + '</figcaption></figure>'; }).join('') +
+        (other.length ? '<h2>Other photos from the day</h2><div class="pp-ph">' + other.map(function (x) { return '<img src="' + x.src + '" alt="">'; }).join('') + '</div>' : '') + '</div>' : '') +
       '<div class="pp-foot">Compiled ' + esc(dayLabel(today())) + ' ' + hm(new Date().toISOString()) + ' from BTC Walk' + (es.some(function (e) { return !e.shipped; }) ? ' · not all lines shipped to BTC yet' : '') + '</div></div>';
     if (S.view !== 'dayprint') return;
     main.innerHTML = '<div class="dhead noprint"><button type="button" class="icon" data-act="back" aria-label="Back to the day"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>' +
       '<span class="t"><b>Compile this day</b><span>' + esc(dayLabel(d)) + ' · ' + esc(tot) + '</span></span></div><div class="scroll"><div class="pad pp-wrap">' + html + '</div></div>' +
-      '<div class="foot"><button type="button" class="btn" data-act="print">Share as PDF</button><button type="button" class="btn primary" data-act="back">Done</button></div>';
+      '<div class="foot"><button type="button" class="btn" data-act="print">Share as PDF</button>' + (d === today() && !(S.closed || {})[d] ? '<button type="button" class="btn primary" data-act="closeday">Sign and close</button>' : '<button type="button" class="btn primary" data-act="back">Done</button>') + '</div>';
   }
 
   // ---------- the week's recap (2.0) ----------
@@ -801,7 +885,7 @@
       '<div class="rnote">' + esc(note) + '</div></div>' +
       (waiting ? '<div class="bar-warn">' + waiting + ' day' + (waiting === 1 ? '' : 's') + ' waiting to ship<button type="button" data-act="ship">Ship</button></div>' : es.length ? '<div class="allclear"><i>' + TICK.replace('currentColor', '#7BE0A6') + '</i><div><b>All clear</b><span>Everything is shipped. Nothing waiting.</span></div></div>' : '');
     main.innerHTML = '<div class="dhead noprint">' + '<button type="button" class="icon" data-act="back" aria-label="Back"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>' + '<span class="t"><b>This week</b><span>' + esc(dayLabel(wk.from)) + ' – ' + esc(dayLabel(wk.to)) + '</span></span></div><div class="scroll"><div class="pad">' + html + '</div></div>' +
-      '<div class="foot"><button type="button" class="btn" data-act="print">Share as PDF</button><button type="button" class="btn primary" data-act="back">Done</button></div>';
+      '<div class="foot"><button type="button" class="btn" data-act="print">Share as PDF</button>' + (d === today() && !(S.closed || {})[d] ? '<button type="button" class="btn primary" data-act="closeday">Sign and close</button>' : '<button type="button" class="btn primary" data-act="back">Done</button>') + '</div>';
   }
 
   // ---------- free up space (2.0) ----------
@@ -1153,6 +1237,14 @@
     else if (act === 'checkupd') { closeSheet(); checkUpdate(true); }
     else if (act === 'earlier') { S.showEarlier = true; renderDays(); }
     else if (act === 'ship') shipSheet();
+    else if (act === 'closeday') closeDaySheet(today());
+    else if (act === 'sendnow') { closeSheet(); shipSheet(); }
+    else if (act === 'closeprev') { closeSheet(); S.day = t.dataset.v; S.view = 'dayprint'; S.fromClose = true; render(); }
+    else if (act === 'doclose') doClose(t.dataset.v);
+    else if (act === 'sigset') sigSheet();
+    else if (act === 'sigclear') sigSheet();
+    else if (act === 'sigphoto') $('sig-in').click();
+    else if (act === 'sigsave') { if (!S.sigInked) { toast('Sign in the box first, or use a photo.', true); return; } try { S.sig = inkOnly($('sig-pad')); } catch (e) { toast(e.message, true); return; } await kvSet('sig', S.sig); toast('Signature saved.'); if (S.view === 'days' && !(S.closed || {})[today()]) closeDaySheet(today()); else closeSheet(); }
     else if (act === 'doship') doShip();
     else if (act === 'send') send();
     else if (act === 'photo') $('photo-in').click();   // the camera, straight away
@@ -1238,6 +1330,7 @@
     S.proj = p; S.entries = await allEntries(p.project.id); S.newParties = (await kvGet('parties:' + p.project.id)) || [];
     S.me = (await kvGet('me:' + p.project.id)) || null; S.loc = (await kvGet('loc')) || null; S.lastLine = (await kvGet('lastLine:' + p.project.id)) || null; S.gone = (await kvGet('gone:' + p.project.id)) || [];
     S.wx = (await kvGet('wx')) || {};
+    S.sig = (await kvGet('sig')) || ''; S.closed = (await kvGet('closed:' + p.project.id)) || {};
     H.ready = true; history.replaceState({ walk: 'root' }, ''); render();
     if (!S.me && !p.demo) pickMe();
     checkUpdate(); wxFetch(); wxRecalc(); packsLoad(true);

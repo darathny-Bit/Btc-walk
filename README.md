@@ -58,6 +58,11 @@ The look and feel are in [DESIGN.md](DESIGN.md). What 2.0 adds:
 - **Amended:** a line changed after it was shipped keeps what it said before (`was`, `amendedAt`), and BTC prints both.
 - **Ship file:** `weather: { "<day>": { source, at, loc, hours: { "<h>": { t, ws, wd, cloud, mm, sym } } } }` with the forecast; entries add `wx`, `crew`, `lost`, `was`, `wasType`, `amendedAt`.
 
+## Close the day (2.9)
+The home screen's main button at the end of the day is **Close the day**: **See the page** (the day as it prints: weather on top, the day in numbers, lines by place with each line's photos under it as P1, P2…, the sign-off, then the photos full size), your signature and title (title from the project file's `role`), a **Reviewer** (anyone in the team, remembered; or nobody), then **Sign and close the day**, which ships the whole day with `close` in the ship file. Once closed the button reads **Closed**; **⋮ › Send now, without closing** ships part-way through a day as before.
+
+**Your signature** (⋮ › Your signature, or from Close the day): draw it with a finger, or take a photo of it on paper (the paper turns clear, cropped to the ink; `inkOnly` is kept in step with BTC's `topbar.js`). It stays on this phone (`kv 'sig'`); a copy goes only with a day you close.
+
 ## Your actions (2.8)
 ⋮ › **Your actions**: the GitHub key and the team password (from whoever set up Phone packs in BTC), once. The home screen then shows **Your actions**: your open actions and chases from BTC (P1 and late first, ↗ chase, ↙ raised by, who else is on it), fetched from the private repo `darathny-Bit/btc-drop` on open and whenever the app comes back, unlocked on the phone (PBKDF2-SHA256 → AES-256-GCM; the same as BTC's `packLock`). The last pack is kept for no signal. Tick one done and it leaves the list (Undo for a few seconds); the tick goes with the next ship (`actionsDone: [{ id, file, at }]`), which counts as something to ship even on a day with no lines. Nothing about the job is in this repo: the repo name and the key are all the app knows until you type them.
 
@@ -88,7 +93,7 @@ BTC Walk only talks to BTC through two files.
 { "format": "btcwalk", "v": 1, "project": { "id", "code", "name" }, "shippedBy": { "name", "handle" }, "shippedAt",
   "entries": [{ "id", "day", "time", "type": "note|flowon|action|itp", "raw", "text", "action", "who", "party", "dir" (chase|ours, 2.4), "area", "itp", "line", "tag",
                 "location", "priority", "due", "photos" ([data URL, …], 1.9), "photo" (the first, for BTC before 2.24), "edited" }],
-  "walks": [], "closures": [], "actionsDone": [{ "id", "file", "at" }] (2.8), "parties": [{ "name", "role", "contact" }] (new on this phone, 2.4) }
+  "walks": [], "closures": [], "actionsDone": [{ "id", "file", "at" }] (2.8), "close": { "date", "at", "sig" (PNG data URL), "title", "reviewer" (initials or "") } (2.9), "parties": [{ "name", "role", "contact" }] (new on this phone, 2.4) }
 ```
 
 ## Updates (2.0.1)
