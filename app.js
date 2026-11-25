@@ -6,7 +6,7 @@
    (⋮ › Load project). No server, nothing sent anywhere else. */
 'use strict';
 (function () {
-  var VERSION = '2.3';
+  var VERSION = '2.4';
   var FORMAT = 'btcwalk', PFORMAT = 'btcproject';
 
   // ---------- the demo job (generic) ----------
@@ -14,6 +14,7 @@
     format: PFORMAT, v: 1, made: null, demo: true,
     project: { id: 'demo-dragon', code: 'DRAGON', name: 'Dragon WWTP (demo)' },
     people: [{ name: 'Sam Rivers', handle: 'SR', team: true }, { name: 'Alex Kerr', handle: 'AK', team: true }, { name: 'Nikau Hale', handle: 'NH', team: true }, { name: 'Jo Tamati', handle: 'JT', team: true }, { name: 'Pat Lee', handle: 'PL', team: false }],
+    parties: [{ name: 'Beca', contact: 'Pat Lee', role: 'Engineer' }, { name: 'DDC', contact: '', role: 'Client' }],
     areas: [
       { name: 'Inlet works', itps: [{ code: 'ITP-01', title: 'Inlet screens', lines: [{ no: '2.1', text: 'Screen frame set out' }, { no: '2.2', text: 'Screen installed and levelled' }, { no: '3.1', text: 'Wash press wired' }] },
         { code: 'ITP-02', title: 'Inlet pumps', lines: [{ no: '2.1', text: 'Pump plinths grouted' }, { no: '2.2', text: 'Pumps set and aligned' }, { no: '3.1', text: 'Discharge pipework pressure test' }] }] },
@@ -81,6 +82,11 @@
     return out;
   }
   var key = function (s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ''); };
+  // Parties (2.4): outside companies for the job (Beca, the client). The project file's parties, plus ones first @'d on
+  // this phone (kept per job, shipped until BTC knows them). An @ that isn't a person or a place is a party.
+  function partiesAll() { var have = {}, out = []; (S.proj.parties || []).concat(S.newParties || []).forEach(function (p) { var k = key(p.name); if (k && !have[k]) { have[k] = 1; out.push(p); } }); return out; }
+  function partyBy(h) { var k = key(h); return k ? partiesAll().filter(function (p) { return key(p.name) === k; })[0] || null : null; }
+  var RAISED = /\b(asked|asks|asking|wants|wanted|requested|requests|request|raised|raises|comment|comments|commented|query|queried|queries|says|said|noted|flagged|instructed|required|requires)\b/i;
   function person(h) { var k = key(h); return (S.proj.people || []).filter(function (p) { return key(p.handle) === k || key(p.name) === k || key(String(p.name).split(' ')[0]) === k; })[0] || null; }
   function placeAt(text, i) {   // longest place name after the @ at i (spaces allowed): { place, len } or null
     var rest = text.slice(i + 1).toLowerCase(), best = null;
@@ -161,7 +167,7 @@
     var mv = /^at\s+(.+)$/i.exec(text);
     if (mv) { var p0 = placeAt('@' + mv[1].trim(), 0); if (p0 && p0.len >= mv[1].trim().length - 1) { out.move = p0.place; return out; } }
     // @ who or where
-    var i = 0, people = [], place = null;
+    var i = 0, people = [], place = null, party = null, dirWord = '';
     while ((i = text.indexOf('@', i)) >= 0) {
       if (i > 0 && /\S/.test(text.charAt(i - 1))) { i++; continue; }
       var pl = placeAt(text, i);
@@ -173,6 +179,12 @@
       var m = /^@(\S+)/.exec(text.slice(i)), mh = m ? m[1].replace(/[,.;:]+$/, '') : '';
       var who = m ? (/^(all|everyone)$/i.test(mh) ? { handle: 'all', name: 'Everyone' } : person(mh)) : null;   // @all: everyone in the team (1.7)
       if (who) { people.push(who); text = (text.slice(0, i) + text.slice(i + m[0].length)).replace(/\s{2,}/g, ' '); continue; }
+      if (m && mh && !party && /^[a-z][a-z&'.-]*$/i.test(mh)) {   // a party: known, or new (it's remembered on send)
+        var kp = partyBy(mh); party = kp ? { name: kp.name, role: kp.role || '' } : { name: mh.charAt(0).toUpperCase() + mh.slice(1), isNew: true };
+        var pre = /(^|\s)(from|per|chase)\s+$/i.exec(text.slice(0, i)), st = pre ? pre.index + pre[1].length : i;
+        if (pre) dirWord = pre[2].toLowerCase() === 'chase' ? 'chase' : 'ours';
+        text = (text.slice(0, st) + text.slice(i + m[0].length)).replace(/\s{2,}/g, ' '); i = st; continue;
+      }
       if (m) out.notFound.push(m[1]);
       i++;
     }
@@ -184,13 +196,26 @@
     if (out.forced && out.forced !== 'flowon') { out.type = out.forced; out.text = text; }
     else if (sep) { out.type = 'flowon'; out.text = text.slice(0, sep.index).trim(); out.action = text.slice(sep.index + sep[0].length).trim(); }
     else if (lead) { out.type = 'flowon'; out.text = text.slice(lead[0].length).trim(); }
-    else { out.text = text; if (out.forced) out.type = out.forced; else if (people.length || out.priority || out.due || VERBS.test(text)) out.type = 'action'; }
+    else { out.text = text; if (out.forced) out.type = out.forced; else if (people.length || party || out.priority || out.due || VERBS.test(text)) out.type = 'action'; }
     if (out.forced === 'flowon') out.type = 'flowon';
     if (out.type === 'flowon' && lead && sep) out.text = out.text.replace(/^(clash|flow-?on|bridge)\b[:\s]*/i, '');
     out.who = people.map(function (p) { return p.handle; }).filter(function (h, k, a) { return a.indexOf(h) === k; }).join(' ');   // one or more (1.7): @AK @SR is 'AK SR'
     if (place) { out.area = place.area || ''; out.itp = place.itp || ''; out.tag = place.tag || ''; out.there = true; }
+    // which way a party item runs: ↗ chase (they owe us) or ↙ ours (they raised it). "chase @Beca" / "from @Beca" say it;
+    // else a raising word (asked, comments…) or a team member beside it = ours, otherwise a chase.
+    if (party) {
+      out.party = party.name; out.partyNew = !!party.isNew; out.partyRole = party.role || '';
+      if (dirWord === 'chase') out.text = out.text.replace(/^(for|about|re)\s+/i, '');
+      out.dir = dirWord || (/^(chase|follow up|waiting|await|get)\b/i.test(out.text) ? 'chase' : RAISED.test(out.text) || people.length ? 'ours' : 'chase');
+    }
     if (out.type === 'delay') out.lost = Math.round(lostHours(String(raw)) * 100) / 100;
     return out;
+  }
+  // turns a line's party round: "from @Beca" ⇄ "chase @Beca" (the words say it, so an edit keeps it)
+  function flipText(v) {
+    var p = parse(v, S.day); if (!p.party) return v;
+    var re = new RegExp('(^|\\s)(?:(?:from|per|chase)\\s+)?@(' + p.party.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')(?=[\\s,.;:]|$)', 'i');
+    return v.replace(re, '$1' + (p.dir === 'ours' ? 'chase' : 'from') + ' @$2');
   }
   var TYPE = { note: 'Note', flowon: 'Clash', action: 'Action', itp: 'ITP', delay: 'Delay', instruction: 'Instruction', crew: 'Crew', visitor: 'Visitor', weather: 'Weather' };
   var CYCLE = ['note', 'flowon', 'action', 'itp'];
@@ -262,7 +287,7 @@
     var where = e.itp ? (e.area ? e.area + ' · ' : '') + e.itp : e.area || e.tag || '';
     var who = e.who ? whoTxt(e.who) + ' · ' : '';
     var head = e.type === 'action' ? 'ACTION · ' + (e.who ? esc(whoTxt(e.who)) : 'you') + (e.priority ? ' · ' + esc(e.priority) : '') : e.type === 'itp' ? itpHead(e) : e.type === 'delay' ? 'DELAY' + (e.lost ? ' · ' + fmtH(e.lost).toUpperCase() + ' LOST' : '') : e.type === 'instruction' ? 'INSTRUCTION' + (e.who ? ' · FROM ' + esc(whoTxt(e.who)) : '') : (TYPE[e.type] || 'Note').toUpperCase();
-    var meta = [where ? '<span class="' + (e.there ? 'there' : '') + '">' + mark(where) + '</span>' : '', e.type !== 'action' && who ? esc(who.replace(' · ', '')) : '', e.due ? 'due ' + esc(dayLabel(e.due)) : '', e.edited ? 'edited' : '', (e.notFound || []).length ? '<span class="nf">@' + esc(e.notFound.join(' @')) + ' not found</span>' : ''].filter(Boolean).join(' · ');
+    var meta = [where ? '<span class="' + (e.there ? 'there' : '') + '">' + mark(where) + '</span>' : '', e.party ? '<span class="pty ' + esc(e.dir) + '">' + (e.dir === 'ours' ? '↙ from ' : '↗ chase ') + mark(e.party) + '</span>' : '', e.type !== 'action' && who ? esc(who.replace(' · ', '')) : '', e.due ? 'due ' + esc(dayLabel(e.due)) : '', e.edited ? 'edited' : '', (e.notFound || []).length ? '<span class="nf">@' + esc(e.notFound.join(' @')) + ' not found</span>' : ''].filter(Boolean).join(' · ');
     var ed = S.edit === e.id;
     return '<button type="button" class="e ' + e.type + (ed ? ' ed' : '') + (S.fresh === e.id ? ' new' : '') + '" data-e="' + esc(e.id) + '"><span class="e-h"><span class="e-k">' + (ed ? PEN : '') + head + '</span><span>' + hm(e.time) + (e.shipped ? ' ✓' : '') + '</span></span>' +
       (e.text ? '<span class="e-t">' + mark(e.text) + '</span>' : '') + (e.type === 'flowon' ? (e.action ? '<span class="e-a">→ ' + mark(e.action) + '</span>' : '<span class="e-none">⚠ No action yet · tap to add</span>') : '') +
@@ -337,7 +362,7 @@
       sg.innerHTML = li.lines.filter(function (l) { return !lk || l.no.indexOf(lk) === 0; }).slice(0, 14).map(function (l) { return '<button type="button" data-line="' + esc(l.no) + '">' + esc(l.no) + '<small>' + esc(l.text) + '</small></button>'; }).join('');
     } else if (at && at[1].length <= 24 && !/\s{2}/.test(at[1])) {
       var k = key(at[1]);
-      var list = (S.proj.people || []).map(function (x) { return { put: x.handle, label: x.name, sub: '@' + x.handle }; }).concat([{ put: 'all', label: 'Everyone', sub: '@all' }]).concat(places().map(function (x) { return { put: x.name, label: x.name, sub: x.kind === 'itp' ? x.area : x.kind }; }))
+      var list = (S.proj.people || []).map(function (x) { return { put: x.handle, label: x.name, sub: '@' + x.handle }; }).concat([{ put: 'all', label: 'Everyone', sub: '@all' }]).concat(partiesAll().map(function (x) { return { put: x.name.replace(/\s+/g, ''), label: x.name, sub: (x.role || 'party') + (x.contact ? ' · ' + x.contact : '') }; })).concat(places().map(function (x) { return { put: x.name, label: x.name, sub: x.kind === 'itp' ? x.area : x.kind }; }))
         .filter(function (x) { return !k || key(x.put).indexOf(k) === 0 || key(x.label).indexOf(k) === 0; }).slice(0, 12);
       if (list.length === 1 && k && (key(list[0].put) === k || key(list[0].label) === k)) list = [];   // already typed in full
       sg.innerHTML = list.map(function (x) { return '<button type="button" data-put="' + esc(x.put) + '">' + esc(x.label) + '<small>' + esc(x.sub) + '</small></button>'; }).join('');
@@ -353,6 +378,7 @@
       (type === 'delay' ? '<span class="chip warn">' + (p.lost ? fmtH(p.lost) + ' lost' : 'add the time lost: 2h, 30 min') + '</span>' : '') + (p.priority ? '<span class="chip">' + p.priority + '</span>' : '') + (p.due ? '<span class="chip">due ' + esc(dayLabel(p.due)) + '</span>' : '') +
       (type === 'flowon' ? (p.action ? '<span class="chip">→ ' + esc(p.action) + '</span>' : '<span class="chip warn">no action yet: add ; and what next</span>') : '') +
       (p.notFound.length ? '<span class="chip nf">@' + esc(p.notFound.join(' @')) + ' not found</span>' : '') +
+      (p.party ? '<button type="button" class="chip pty ' + p.dir + '" data-act="flip">' + (p.dir === 'ours' ? '↙ from ' : '↗ chase ') + esc(p.party) + (p.partyNew ? ' · new' : p.partyRole ? ' · ' + esc(p.partyRole) : '') + ' ⇄</button>' : '') +
       (type === 'itp' ? (p.itp && p.line ? '<span class="chip">' + esc(p.line) + ' ' + esc((lineOf(p.itp, p.line) || {}).text || '') + '</span>'
         : (S.lastLine && !p.itp ? '<button type="button" class="chip itp" data-act="lastline">＋ ' + esc(S.lastLine.itp + ' ' + S.lastLine.line) + '</button>' : '') + '<span class="chip warn">' + (p.itp ? 'no line: ' : '') + 'sorted on the PC</span>') : '');
   }
@@ -380,22 +406,28 @@
     if (/^@/.test(q)) return String(e.who || '').split(/\s+/).some(function (h) { return key(h) === key(q.slice(1)); }) || key(e.area) === key(q.slice(1)) || key(e.itp) === key(q.slice(1));
     return [e.text, e.action, e.area, e.itp, e.tag, e.who, e.raw].join(' ').toLowerCase().indexOf(q) >= 0;
   }
+  async function learnParty(name) {
+    if (partyBy(name)) return;
+    S.newParties = (S.newParties || []).concat([{ name: name, role: '', contact: '', new: true }]);
+    await kvSet('parties:' + S.proj.project.id, S.newParties);
+  }
   async function send() {
     var b = $('box'); if (!b) return;
     var raw = b.value.trim(); if (!raw && !S.photos.length && !S.edit) return;
     var p = parse(raw, S.day);
     if (p.move) { S.loc = p.move; await kvSet('loc', S.loc); S.draft = ''; b.value = ''; toast('At ' + p.move.name); renderDay(); return; }
     var type = S.as || p.type, now = new Date().toISOString();
+    if (p.party && p.partyNew) await learnParty(p.party);
     var where = p.there ? {} : S.loc ? { area: S.loc.area || '', itp: S.loc.itp || '', tag: S.loc.tag || '' } : {};
     if (S.edit) {
       var e = S.entries.filter(function (x) { return x.id === S.edit; })[0];
       if (e && e.shippedAt && !e.was) { e.was = e.raw || e.text; e.wasType = e.type; }   // amended after shipping (2.1): BTC prints the original too
       if (e && e.shippedAt) e.amendedAt = new Date().toISOString();
-      if (e) { Object.assign(e, { wx: p.wx, crew: p.crew, lost: p.lost }); Object.assign(e, { raw: raw, type: type, line: p.line, text: p.text || '', action: p.action, who: p.who, priority: p.priority, due: p.due, notFound: p.notFound, edited: true, shipped: false, there: !!p.there }, p.there ? { area: p.area, itp: p.itp, tag: p.tag } : {}); e.photos = S.photos.slice(); delete e.photo; await putEntry(e); }
+      if (e) { Object.assign(e, { wx: p.wx, crew: p.crew, lost: p.lost }); Object.assign(e, { raw: raw, type: type, line: p.line, text: p.text || '', action: p.action, who: p.who, party: p.party || '', dir: p.dir || '', priority: p.priority, due: p.due, notFound: p.notFound, edited: true, shipped: false, there: !!p.there }, p.there ? { area: p.area, itp: p.itp, tag: p.tag } : {}); e.photos = S.photos.slice(); delete e.photo; await putEntry(e); }
       S.edit = null; S.photos = []; S.as = null; renderDay(); toast('Saved'); return;
     }
     if (type === 'itp' && p.itp && p.line) { S.lastLine = { itp: p.itp, line: p.line }; kvSet('lastLine:' + S.proj.project.id, S.lastLine); }
-    var en = { id: uid(), proj: S.proj.project.id, day: S.day, time: now, raw: raw, type: type, line: p.line, text: p.text || '', action: p.action, who: p.who, area: p.there ? p.area : where.area || '', itp: p.there ? p.itp : where.itp || '', tag: p.there ? p.tag : where.tag || '',
+    var en = { id: uid(), proj: S.proj.project.id, day: S.day, time: now, raw: raw, type: type, line: p.line, text: p.text || '', action: p.action, who: p.who, party: p.party || '', dir: p.dir || '', area: p.there ? p.area : where.area || '', itp: p.there ? p.itp : where.itp || '', tag: p.there ? p.tag : where.tag || '',
       location: S.loc ? S.loc.name : '', priority: p.priority, due: p.due, photos: S.photos.slice(), edited: false, shipped: false, notFound: p.notFound, there: !!p.there };
     if (p.wx) en.wx = p.wx; if (p.crew) en.crew = p.crew; if (p.lost) en.lost = p.lost;
     S.entries.push(en); await putEntry(en);
@@ -487,11 +519,13 @@
     var es = [], pickDays = {}; pick.forEach(function (d) { es = es.concat(d.entries); pickDays[d.day] = true; });
     var gone = (S.gone || []).filter(function (g) { return pickDays[g.day]; });
     var body = { format: FORMAT, v: 1, project: { id: S.proj.project.id, code: S.proj.project.code, name: S.proj.project.name }, shippedBy: { name: S.me ? S.me.name : '', handle: S.me ? S.me.handle : '' }, shippedAt: new Date().toISOString(), app: 'BTC Walk ' + VERSION,
-      walks: [], entries: es.map(function (e) { return { id: e.id, day: e.day, time: e.time, type: e.type, raw: e.raw, text: e.text, action: e.action, who: e.who, area: e.area, itp: e.itp, line: e.line || '', tag: e.tag, location: e.location, priority: e.priority, due: e.due, photos: pics(e), photo: pics(e)[0] || '', edited: e.edited, wx: e.wx, crew: e.crew, lost: e.lost, was: e.was, wasType: e.wasType, amendedAt: e.amendedAt }; }), removed: gone.map(function (g) { return { id: g.id, day: g.day }; }), closures: [] };
+      walks: [], entries: es.map(function (e) { return { id: e.id, day: e.day, time: e.time, type: e.type, raw: e.raw, text: e.text, action: e.action, who: e.who, party: e.party || '', dir: e.dir || '', area: e.area, itp: e.itp, line: e.line || '', tag: e.tag, location: e.location, priority: e.priority, due: e.due, photos: pics(e), photo: pics(e)[0] || '', edited: e.edited, wx: e.wx, crew: e.crew, lost: e.lost, was: e.was, wasType: e.wasType, amendedAt: e.amendedAt }; }), removed: gone.map(function (g) { return { id: g.id, day: g.day }; }), closures: [] };
     // .btcwalk.txt as plain text (1.4.1): Android's share sheet refuses file types it doesn't know ("Permission denied"),
     // and plain text is one it always takes. BTC reads .btcwalk and .btcwalk.txt alike.
     var wx = {}; for (var wi = 0; wi < pick.length; wi++) { var fc = await wxForecast(pick[wi].day), st0 = await wxStart(pick[wi].day); if (fc || st0) wx[pick[wi].day] = Object.assign({}, fc || { day: pick[wi].day, source: 'MET Norway', hours: {} }, st0 ? { start: st0 } : {}); }
-    if (Object.keys(wx).length) body.weather = wx;   // the forecast BTC needs to draw the job's weather (2.1); logged weather goes as lines
+    if (Object.keys(wx).length) body.weather = wx;
+    var np2 = (S.newParties || []).filter(function (x) { return !(S.proj.parties || []).some(function (y) { return key(y.name) === key(x.name); }); });
+    if (np2.length) body.parties = np2.map(function (x) { return { name: x.name, role: x.role || '', contact: x.contact || '' }; });   // new to BTC (2.4)   // the forecast BTC needs to draw the job's weather (2.1); logged weather goes as lines
     var name = fileName(pick), file = new File([JSON.stringify(body)], name, { type: 'text/plain' });
     var save = function () { var a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = name; document.body.appendChild(a); a.click(); a.remove(); };
     var shared = false;
@@ -520,7 +554,7 @@
     if (!p || p.format !== PFORMAT || !p.project || !p.project.id) { toast('That isn’t a BTC project file (make it in Build: ⋮ › Phone project file…).', true); return; }
     p.loadedAt = new Date().toISOString();
     await kvSet('project', p); S.proj = p;
-    S.entries = await allEntries(p.project.id); S.gone = (await kvGet('gone:' + p.project.id)) || [];
+    S.entries = await allEntries(p.project.id); S.newParties = (await kvGet('parties:' + p.project.id)) || []; S.gone = (await kvGet('gone:' + p.project.id)) || [];
     var me = await kvGet('me:' + p.project.id); S.me = me || null; S.loc = null; await kvSet('loc', null);
     closeSheet(); S.view = 'days'; render();
     toast('Loaded ' + p.project.name + (p.made ? ' (from ' + dayLabel(p.made.slice(0, 10)) + ')' : '') + '.');
@@ -554,7 +588,7 @@
   function closeSheet() { hideSheet(sync); }
   async function useDemo() {
     var p = JSON.parse(JSON.stringify(DEMO)); p.made = new Date().toISOString(); p.loadedAt = p.made;
-    await kvSet('project', p); S.proj = p; S.entries = await allEntries(p.project.id); S.gone = (await kvGet('gone:' + p.project.id)) || [];
+    await kvSet('project', p); S.proj = p; S.entries = await allEntries(p.project.id); S.newParties = (await kvGet('parties:' + p.project.id)) || []; S.gone = (await kvGet('gone:' + p.project.id)) || [];
     S.me = (await kvGet('me:' + p.project.id)) || { name: 'Sam Rivers', handle: 'SR' }; await kvSet('me:' + p.project.id, S.me);
     if (!S.entries.length) await seedDemo();
     closeSheet(); S.view = 'days'; render();
@@ -960,6 +994,7 @@
     else if (act === 'pics') $('pics-in').click();     // several from the phone's photos (1.9)
     else if (act === 'nophoto') { S.photos.splice(+t.dataset.i || 0, 1); renderDay(); }
     else if (act === 'findday') { S.findOpen = !S.findOpen; if (!S.findOpen) S.find = ''; renderDay(); var fd = $('find-day'); if (fd) fd.focus(); }
+    else if (act === 'flip') { var bf = $('box'); if (bf) { bf.value = flipText(bf.value); S.draft = bf.value; bf.focus(); reads(); } }
     else if (act === 'as') { var cur = $('box') ? (S.as || parse($('box').value, S.day).type) : 'note'; S.as = CYCLE[(CYCLE.indexOf(cur) + 1) % CYCLE.length]; reads(); }
     else if (act === 'lastline') { var bx2 = $('box'); bx2.value = bx2.value.replace(/\s*$/, '') + ' @' + S.lastLine.itp + ' ' + S.lastLine.line; S.draft = bx2.value; bx2.focus(); reads(); }
     else if (act === 'unloc') { S.loc = null; await kvSet('loc', null); renderDay(); }
@@ -1030,7 +1065,7 @@
     if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(function () { /* offline cache is a bonus */ });
     var p = await kvGet('project');
     if (!p) { H.ready = true; history.replaceState({ walk: 'root' }, ''); await useDemo(); checkUpdate(); return; }
-    S.proj = p; S.entries = await allEntries(p.project.id);
+    S.proj = p; S.entries = await allEntries(p.project.id); S.newParties = (await kvGet('parties:' + p.project.id)) || [];
     S.me = (await kvGet('me:' + p.project.id)) || null; S.loc = (await kvGet('loc')) || null; S.lastLine = (await kvGet('lastLine:' + p.project.id)) || null; S.gone = (await kvGet('gone:' + p.project.id)) || [];
     S.wx = (await kvGet('wx')) || {};
     H.ready = true; history.replaceState({ walk: 'root' }, ''); render();

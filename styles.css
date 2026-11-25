@@ -342,3 +342,9 @@ main.in-back { animation: in-back .24s var(--ease); }
 .wxc-t b { font-size: 26px; font-weight: 700; letter-spacing: -.03em; color: var(--ink); line-height: 1; }
 .wxc-t i { position: absolute; top: -2px; right: -8px; width: 7px; height: 7px; border-radius: 50%; background: var(--lime, #D4FF3A); }
 .wxc-s { font-size: 12px; color: var(--muted); white-space: nowrap; }
+
+/* parties (2.4): ↗ chase = they owe us (orange), ↙ from = ours to do (purple); tap the chip to turn it round */
+.chip.pty { font-weight: 600; }
+.chip.pty.chase { background: var(--flow-bg); color: var(--flow-ink); }
+.chip.pty.ours { background: var(--act-bg); color: var(--act-ink); }
+.e-m .pty.chase { color: var(--flow-ink); } .e-m .pty.ours { color: var(--act-ink); }

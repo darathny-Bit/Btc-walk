@@ -21,6 +21,8 @@ It opens on a made-up demo job. Load your job with ⋮ › **Load project…** a
 | `chase the cable schedule @AK P1 fri` | an **action** for AK, priority 1, due Friday |
 | `replace the isolator label` | an **action** for you (it starts with a doing word) |
 | `flange gasket weeping @ITP-06` | tagged to that place, not where you are |
+| `pump curves @Beca fri` or `chase @Beca for pump curves` | an **action** with a party: **↗ they owe us**, you chase it |
+| `review comments from @Beca` or `Beca asked for the O&M manuals @Beca` | **↙ ours to do**, raised by Beca (also `@AK … @Beca`) |
 | `walk the decanter @AK @SR` or `toolbox talk @all` | an **action** for both (or everyone): one card in BTC, each closes their own part |
 | `at SBR 1` | moves you there (no line logged) |
 | `bolts torqued @ITP-06 3.2` (with a photo) | **ITP** evidence for that line: BTC files its photos on ITP-06 line 3.2 by itself. After `@ITP-06` and a space the ITP's lines are offered |
@@ -54,6 +56,9 @@ The look and feel are in [DESIGN.md](DESIGN.md). What 2.0 adds:
 - **Amended:** a line changed after it was shipped keeps what it said before (`was`, `amendedAt`), and BTC prints both.
 - **Ship file:** `weather: { "<day>": { source, at, loc, hours: { "<h>": { t, ws, wd, cloud, mm, sym } } } }` with the forecast; entries add `wx`, `crew`, `lost`, `was`, `wasType`, `amendedAt`.
 
+## Parties (2.4)
+Outside parties for the job (Beca, the Engineer, CCC) come from the project file (`parties`). Type `@` and they're offered with their role. An @ that isn't a person or a place (letters only) is a party: a new one is remembered on this phone and shipped to BTC, which adds it to the job's list. Each item runs one way: **↗ chase** (they owe us) or **↙ from** (they raised it, ours to do). `chase @Beca` and `from @Beca` say it; otherwise a raising word (asked, comments, query…) or a team member beside it makes it ours, else a chase. Tap the chip to turn it round (it changes the words).
+
 ## The two files
 BTC Walk only talks to BTC through two files.
 
@@ -62,6 +67,7 @@ BTC Walk only talks to BTC through two files.
 { "format": "btcproject", "v": 1, "made": ISO time,
   "project": { "id", "code", "name" },
   "people": [{ "name", "handle", "team": true }],
+  "parties": [{ "name", "contact", "role" }],   (2.4)
   "areas": [{ "name", "itps": [{ "code", "title", "lines": [{ "no", "text" }] }] }],
   "flowons": [{ "no", "area", "itp", "desc", "action" }] }
 ```
@@ -69,9 +75,9 @@ BTC Walk only talks to BTC through two files.
 **Ship file** (`<code>_<you>_<day>.btcwalk.txt`: JSON, named .txt because Android's share sheet only takes file types it knows; BTC reads `.btcwalk` and `.btcwalk.txt`), what Ship sends:
 ```
 { "format": "btcwalk", "v": 1, "project": { "id", "code", "name" }, "shippedBy": { "name", "handle" }, "shippedAt",
-  "entries": [{ "id", "day", "time", "type": "note|flowon|action|itp", "raw", "text", "action", "who", "area", "itp", "line", "tag",
+  "entries": [{ "id", "day", "time", "type": "note|flowon|action|itp", "raw", "text", "action", "who", "party", "dir" (chase|ours, 2.4), "area", "itp", "line", "tag",
                 "location", "priority", "due", "photos" ([data URL, …], 1.9), "photo" (the first, for BTC before 2.24), "edited" }],
-  "walks": [], "closures": [] }
+  "walks": [], "closures": [], "parties": [{ "name", "role", "contact" }] (new on this phone, 2.4) }
 ```
 
 ## Updates (2.0.1)
