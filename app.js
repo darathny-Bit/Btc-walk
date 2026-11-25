@@ -6,7 +6,7 @@
    (⋮ › Load project). No server, nothing sent anywhere else. */
 'use strict';
 (function () {
-  var VERSION = '2.7';
+  var VERSION = '2.8';
   var FORMAT = 'btcwalk', PFORMAT = 'btcproject';
 
   // ---------- the demo job (generic) ----------
@@ -225,11 +225,12 @@
     var m = {};
     S.entries.forEach(function (e) { (m[e.day] = m[e.day] || []).push(e); });
     var gone = {}; (S.gone || []).forEach(function (g) { gone[g.day] = (gone[g.day] || 0) + 1; m[g.day] = m[g.day] || []; });
+    var ticks = (S.packDone || []).filter(function (d) { return !d.sent; }).length; if (ticks) m[today()] = m[today()] || [];   // ticks go with today's ship (2.8)
     return Object.keys(m).sort().reverse().map(function (d) {
       var es = m[d].sort(function (a, b) { return a.time < b.time ? -1 : 1; });
       // changed since it was shipped (1.7): an edited line, or one deleted after shipping; ship again to bring BTC up to date
       var changed = !!gone[d] || es.some(function (e) { return !e.shipped && e.shippedAt; });
-      var lines = changed || es.some(function (e) { return !e.shipped; }), wxo = !!(S.wxOwed && S.wxOwed[d]);
+      var lines = changed || es.some(function (e) { return !e.shipped; }) || (ticks && d === today()), wxo = !!(S.wxOwed && S.wxOwed[d]);
       return { day: d, entries: es, unshipped: lines || wxo, wxOnly: wxo && !lines, changed: changed, gone: gone[d] || 0 };
     });
   }
@@ -257,6 +258,7 @@
     if (chg.length) html += '<div class="bar-warn">' + (chg.length === 1 ? (chg[0].day === t ? 'Today' : dayLabel(chg[0].day)) + ' changed' : chg.length + ' days changed') + ' since you shipped<button type="button" data-act="ship">Ship again</button></div>';
     else if (old.length) html += '<div class="bar-warn">' + (old.length === 1 ? dayLabel(old[0].day) + ' isn’t' : old.length + ' days aren’t') + ' shipped yet<button type="button" data-act="ship">Ship now</button></div>';
     else if (ds.length && !waiting.length) html += '<div class="allclear"><i>' + TICK.replace('currentColor', '#7BE0A6') + '</i><div><b>All clear</b><span>Everything is shipped. Nothing waiting.</span></div></div>';
+    html += packHtml();
     if (ds.length) html += '<div class="tools"><button type="button" class="tool i" data-act="evidence"><b>Evidence</b><span>Photos by ITP line</span></button><button type="button" class="tool" data-act="recap"><b>This week</b><span>Your week on the record</span></button></div>';
     var cutoff = addDays(t, -6), recent = ds.filter(function (d) { return d.day >= cutoff; }), earlier = ds.filter(function (d) { return d.day < cutoff; });
     var card = function (d) {
@@ -480,6 +482,66 @@
     if (!S.findAll) fa.focus();
   }
 
+  // ---------- your actions, from BTC (2.8) ----------
+  // BTC (Actions) locks each person's open actions and chases with the team password and puts them in the private
+  // GitHub repo darathny-Bit/btc-drop (packs/<job hash>/<initials>.btcpack). The phone reads yours with the key and
+  // unlocks it (PBKDF2-SHA256 → AES-256-GCM, the same code as BTC's, kept in step by hand). The key and password stay on
+  // this phone (kv 'packs'); the last pack is kept for no signal. A tick goes back in the next ship (actionsDone).
+  var PACK_REPO = 'darathny-Bit/btc-drop';
+  function unb64(t) { var s2 = atob(t), a = new Uint8Array(s2.length); for (var i = 0; i < s2.length; i++) a[i] = s2.charCodeAt(i); return a; }
+  async function sha256hex(text) { var h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)); return Array.prototype.map.call(new Uint8Array(h), function (x) { return (x < 16 ? '0' : '') + x.toString(16); }).join(''); }
+  async function packUnlock(text, pass) {
+    var j = JSON.parse(text);
+    if (!j || j.btcpack !== 1) throw new Error('That isn’t a BTC pack.');
+    var base = await crypto.subtle.importKey('raw', new TextEncoder().encode(pass), 'PBKDF2', false, ['deriveKey']);
+    var key = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt: unb64(j.salt), iterations: j.iter || 310000, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
+    try { return JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(j.iv) }, key, unb64(j.data)))); }
+    catch (e) { throw new Error('The team password doesn’t open it. Check it in ⋮ › Your actions.'); }
+  }
+  async function packsLoad(quiet) {
+    if (!S.proj || S.proj.demo || !S.me) return;
+    var cfg = (await kvGet('packs')) || {}; S.packCfg = cfg;
+    if (!S.pack) S.pack = (await kvGet('pack:' + S.proj.project.id)) || null;
+    S.packDone = (await kvGet('packDone:' + S.proj.project.id)) || [];
+    if (!cfg.key || !cfg.pass || !navigator.onLine) { if (S.view === 'days') renderDays(); return; }
+    try {
+      var job = (await sha256hex('btc-job:' + S.proj.project.id)).slice(0, 16);
+      var r = await fetch('https://api.github.com/repos/' + PACK_REPO + '/contents/packs/' + job + '/' + encodeURIComponent(S.me.handle) + '.btcpack', { headers: { Authorization: 'Bearer ' + cfg.key, Accept: 'application/vnd.github.raw', 'X-GitHub-Api-Version': '2022-11-28' }, cache: 'no-store' });
+      if (r.status === 404) throw new Error('No actions from BTC yet for @' + S.me.handle + ' (BTC sends them once Phone packs is set up there).');
+      if (r.status === 401) throw new Error('GitHub turned the key down (expired or cancelled?).');
+      if (!r.ok) throw new Error('GitHub answered ' + r.status + '.');
+      var pk = await packUnlock(await r.text(), cfg.pass);
+      S.pack = pk; S.packErr = ''; await kvSet('pack:' + S.proj.project.id, pk);
+      // a tick BTC has now closed drops out of the to-send list
+      var open = {}; (pk.actions || []).forEach(function (a) { open[a.id] = 1; });
+      var keep = S.packDone.filter(function (d) { return !d.sent || open[d.id]; }); if (keep.length !== S.packDone.length) { S.packDone = keep; await kvSet('packDone:' + S.proj.project.id, keep); }
+    } catch (e) { S.packErr = (e && e.message) || 'No signal'; if (!quiet) toast(S.packErr, true); }
+    if (S.view === 'days') renderDays();
+  }
+  function packList() { var done = {}; (S.packDone || []).forEach(function (d) { done[d.id] = 1; }); return ((S.pack && S.pack.actions) || []).filter(function (a) { return !done[a.id]; }); }
+  function packHtml() {
+    if (!S.pack && !S.packErr) return '';
+    var t = today(), list = packList(), late = list.filter(function (a) { return a.due && a.due < t; }).length;
+    var show = S.packAll ? list : list.slice(0, 4);
+    var row = function (a) {
+      var chase = a.kind === 'chase', due = a.due ? (a.due < t ? 'late · ' : '') + dayLabel(a.due) : '';
+      return '<div class="pa' + (a.due && a.due < t ? ' late' : '') + '"><button type="button" class="pa-tick" data-pdone="' + esc(a.id) + '" aria-label="Done: ' + esc(a.title) + '"></button>' +
+        '<span class="pa-b"><b>' + (a.prio === 1 ? '<i class="pa-p">P1</i>' : '') + esc(a.title) + '</b><span>' + [chase ? '↗ chase ' + esc(a.waitingOn) : a.raisedBy ? '↙ from ' + esc(a.raisedBy) : '', a.with && a.with.length ? 'with ' + esc(a.with.map(function (x) { return '@' + x; }).join(' ')) : '', a.ref ? esc(a.ref) : '', due ? esc(due) : ''].filter(Boolean).join(' · ') + '</span></span></div>';
+    };
+    return '<div class="sec">Your actions' + (list.length ? ' · ' + list.length + (late ? ' · <span class="pa-late">' + late + ' late</span>' : '') : '') + '</div>' +
+      (S.packErr && !S.pack ? '<div class="bar-warn">' + esc(S.packErr) + '</div>' : '') +
+      (list.length ? '<div class="pas">' + show.map(row).join('') + (list.length > 4 ? '<button type="button" class="pa-more" data-act="packall">' + (S.packAll ? 'Show fewer' : 'All ' + list.length) + '</button>' : '') + '</div>' : S.pack ? '<div class="allclear"><div><b>Nothing open</b><span>No actions or chases for you in BTC.</span></div></div>' : '') +
+      ((S.packDone || []).filter(function (d) { return !d.sent; }).length ? '<div class="bar-info">' + S.packDone.filter(function (d) { return !d.sent; }).length + ' done here · goes to BTC with your next ship</div>' : '');
+  }
+  function packsSettings() {
+    var c = S.packCfg || {};
+    sheet('<div class="grip"></div><h2>Your actions</h2><p>Shows your open actions and chases from BTC, locked with the team password. Get the key and the password from whoever set up Phone packs in BTC (once).</p>' +
+      '<div class="list"><label class="fld"><span>GitHub key</span><input type="password" id="pk-key" autocomplete="off" placeholder="' + (c.key ? '•••• saved' : 'github_pat_…') + '"></label>' +
+      '<label class="fld"><span>Team password</span><input type="text" id="pk-pass" autocomplete="off" autocapitalize="off" value="' + esc(c.pass || '') + '" placeholder="four words"></label></div>' +
+      (S.packErr ? '<p class="small" style="color:var(--flow)">' + esc(S.packErr) + '</p>' : S.pack ? '<p class="small">Last from BTC ' + esc(dayLabel((S.pack.made || '').slice(0, 10))) + ' ' + hm(S.pack.made) + '.</p>' : '') +
+      '<button type="button" class="btn primary" data-act="pksave" style="min-height:52px">Save</button>');
+  }
+
   // ---------- ship ----------
   function shipSheet() {
     var ds = daysOf().filter(function (d) { return d.unshipped; });
@@ -527,6 +589,7 @@
     // and plain text is one it always takes. BTC reads .btcwalk and .btcwalk.txt alike.
     var wx = {}; for (var wi = 0; wi < pick.length; wi++) { var fc = await wxForecast(pick[wi].day), st0 = await wxStart(pick[wi].day); if (fc || st0) wx[pick[wi].day] = Object.assign({}, fc || { day: pick[wi].day, source: 'MET Norway', hours: {} }, st0 ? { start: st0 } : {}); }
     if (Object.keys(wx).length) body.weather = wx;
+    var dn = (S.packDone || []).filter(function (d) { return !d.sent; }); if (dn.length) body.actionsDone = dn.map(function (d) { return { id: d.id, file: d.file, at: d.at }; });   // ticked on site (2.8)
     var np2 = (S.newParties || []).filter(function (x) { return !(S.proj.parties || []).some(function (y) { return key(y.name) === key(x.name); }); });
     if (np2.length) body.parties = np2.map(function (x) { return { name: x.name, role: x.role || '', contact: x.contact || '' }; });   // new to BTC (2.4)   // the forecast BTC needs to draw the job's weather (2.1); logged weather goes as lines
     var name = fileName(pick), file = new File([JSON.stringify(body)], name, { type: 'text/plain' });
@@ -545,6 +608,7 @@
     var at = new Date().toISOString();
     for (var i = 0; i < es.length; i++) { es[i].shipped = true; es[i].shippedAt = at; await putEntry(es[i]); }
     for (var wd in wx) await kvSet('wxsent:' + S.proj.project.id + ':' + wd, wx[wd].at || at);   // BTC has this day's weather now (2.7)
+    if (dn.length) { S.packDone = (S.packDone || []).map(function (d) { return d.sent ? d : Object.assign({}, d, { sent: at }); }); await kvSet('packDone:' + S.proj.project.id, S.packDone); }
     await wxRecalc();
     if (gone.length) { S.gone = (S.gone || []).filter(function (g) { return !pickDays[g.day]; }); await kvSet('gone:' + S.proj.project.id, S.gone); }
     S.shipPick = null; buzz([12, 60, 12]); S.view = 'days'; render();
@@ -575,6 +639,7 @@
     sheet('<div class="grip"></div><h2>' + esc(p.project.name) + '</h2>' +
       '<div class="list"><button type="button" data-act="load"><span class="lt"><b>Load project…</b><span>' + (p.demo ? 'The demo is loaded. Pick the file Build makes: ⋮ › Phone project file…' : 'Project file from ' + esc(made || '?') + '. Pick a newer one when the job changes.') + '</span></span></button>' +
       '<button type="button" data-act="me"><span class="lt"><b>You: ' + esc(S.me ? S.me.name : 'not picked') + '</b><span>Whose diary your days go into</span></span></button>' +
+      (p.demo ? '' : '<button type="button" data-act="pkset"><span class="lt"><b>Your actions: ' + (S.packCfg && S.packCfg.key ? 'on' : 'off') + '</b><span>Your open actions and chases from BTC</span></span></button>') +
       '<button type="button" data-act="wxset"><span class="lt"><b>Weather: ' + (wxOn() ? 'on' : 'off') + '</b><span>' + (wxOn() ? 'Forecast from MET Norway' + (siteLoc() ? '' : ' · set the site location') : 'Fill in each day’s weather from MET Norway') + '</span></span></button>' +
       (p.demo ? '' : '<button type="button" data-act="demo"><span class="lt"><b>Try the demo</b><span>A made-up job to practise on. Your job’s lines stay on the phone.</span></span></button>') + '</div>' +
       '<div class="sec">On this phone</div>' + (function () { var o = oldShipped(); return o.length ? '<div class="list"><button type="button" data-act="clearold"><span class="lt"><b>Free up space</b><span>Clear ' + o.length + ' shipped line' + (o.length === 1 ? '' : 's') + ' older than a month (' + (JSON.stringify(o).length / 1048576).toFixed(1) + ' MB). They’re safe in BTC.</span></span></button></div>' : ''; })() + '<p>' + n + ' line' + (n === 1 ? '' : 's') + ' for this job. Nothing leaves the phone until you ship. Keep BTC Walk on your Home Screen (Safari › Share › Add to Home Screen) so the phone keeps them.</p>' +
@@ -1023,6 +1088,12 @@
     if (t && t.dataset.ins != null) { var bi = $('box'); if (!bi) return; var cur = bi.value; bi.value = /^\w+\.$/.test(t.dataset.ins.trim()) ? t.dataset.ins + cur.replace(/^\s+/, '') : cur.replace(/\s*$/, '') + (cur.trim() ? ' ' : '') + t.dataset.ins.replace(/^\s+/, ''); S.draft = bi.value; bi.focus(); bi.setSelectionRange(bi.value.length, bi.value.length); grow(); reads(); buzz(4); return; }
     if (t && t.dataset.ev) { S.evItp = t.dataset.ev; S.evLine = null; renderEvidence(); slide('fwd'); sync(); return; }
     if (t && t.dataset.evl) { S.evLine = S.evLine === t.dataset.evl ? null : t.dataset.evl; renderEvidence(); return; }
+    if (t && t.dataset.pdone) {   // done on site (2.8): off the list now, to BTC with the next ship; Undo puts it back
+      var pid = t.dataset.pdone; S.packDone = (S.packDone || []).concat([{ id: pid, file: ((S.pack && S.pack.actions) || []).filter(function (a) { return a.id === pid; }).map(function (a) { return a.file; })[0] || '', at: new Date().toISOString() }]);
+      await kvSet('packDone:' + S.proj.project.id, S.packDone); buzz(10); renderDays();
+      toast('Done · goes to BTC with your next ship', false, { label: 'Undo', fn: async function () { S.packDone = S.packDone.filter(function (d) { return d.id !== pid || d.sent; }); await kvSet('packDone:' + S.proj.project.id, S.packDone); renderDays(); } });
+      return;
+    }
     if (t && t.dataset.ph != null) { S.viewBin = false; viewer(+t.dataset.ph); return; }
     var lph = ev.target.closest && ev.target.closest('[data-lph]');
     if (lph && !(S.edit && lph.closest('[data-e="' + S.edit + '"]'))) {   // a line's photo: full screen, not edit
@@ -1062,6 +1133,14 @@
     else if (act === 'clearold') clearOld();
     else if (act === 'wxdetail') wxDetail();
     else if (act === 'wxset') wxSettings();
+    else if (act === 'pkset') packsSettings();
+    else if (act === 'packall') { S.packAll = !S.packAll; renderDays(); }
+    else if (act === 'pksave') {
+      var c0 = (await kvGet('packs')) || {}, k0 = ($('pk-key') || {}).value || '', p0 = (($('pk-pass') || {}).value || '').trim();
+      k0 = k0.trim(); if (k0) { if (!/^(github_pat_|ghp_)[A-Za-z0-9_]{20,}$/.test(k0)) { toast('That doesn’t look like a GitHub key (github_pat_…).', true); return; } c0.key = k0; }
+      if (!c0.key || !p0) { toast('Both the key and the team password are needed.', true); return; }
+      c0.pass = p0; await kvSet('packs', c0); S.packCfg = c0; closeSheet(); toast('Getting your actions…'); await packsLoad(false); if (S.pack && !S.packErr) toast(packList().length + ' open for you');
+    }
     else if (act === 'wxon') { S.wx = Object.assign(S.wx || {}, { on: true, acceptedAt: new Date().toISOString() }); await kvSet('wx', S.wx); wxSettings(); if (!siteLoc()) toast('Now set the site location: tap “Use where this phone is now” on site.'); else wxFetch(true); }
     else if (act === 'wxtry') { if (!navigator.onLine) { toast('No signal: try again when you have some.', true); return; } toast('Getting the forecast…'); var okw = await wxFetch(true); wxSettings(); toast(okw ? 'Forecast in. ' + (Object.keys(S.wxOwed || {}).length ? 'Ship to send it to BTC.' : 'BTC has it.') : (S.wx.err || 'No forecast') + '.', !okw); }
     else if (act === 'wxoff') { S.wx.on = false; await kvSet('wx', S.wx); wxSettings(); }
@@ -1147,7 +1226,7 @@
     } catch (e) { /* reload anyway */ }
     location.reload();
   }
-  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') { checkUpdate(); wxFetch(); } });
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') { checkUpdate(); wxFetch(); packsLoad(true); } });
   setInterval(function () { if (document.visibilityState === 'visible') checkUpdate(); }, 600000);
 
   // ---------- start ----------
@@ -1161,7 +1240,7 @@
     S.wx = (await kvGet('wx')) || {};
     H.ready = true; history.replaceState({ walk: 'root' }, ''); render();
     if (!S.me && !p.demo) pickMe();
-    checkUpdate(); wxFetch(); wxRecalc();
+    checkUpdate(); wxFetch(); wxRecalc(); packsLoad(true);
   })();
   // Swipe back on iPhone (1.2). A Home Screen app on iPhone has no swipe-back of its own, so BTC Walk does it: start at
   // the left edge and drag right, the same steps as Back on Android. Only in the Home Screen app on iPhone (in Safari,

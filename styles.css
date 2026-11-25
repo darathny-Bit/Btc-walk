@@ -380,3 +380,20 @@ main.in-back { animation: in-back .24s var(--ease); }
   .pp-wrap { padding: 0; } .paper { box-shadow: none; border-radius: 0; padding: 0; }
   .dhead { display: none !important; }
 }
+
+/* your actions from BTC (2.8) */
+.pas { display: flex; flex-direction: column; border-radius: 18px; background: var(--panel); border: 1px solid var(--line); overflow: hidden; }
+.pa { display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; border-top: 1px solid var(--line); }
+.pa:first-child { border-top: 0; }
+.pa-tick { flex: none; width: 26px; height: 26px; margin-top: 1px; border-radius: 50%; border: 2px solid var(--act); background: transparent; position: relative; }
+.pa-tick::before { content: ''; position: absolute; inset: -9px; }
+.pa-b { flex: 1; min-width: 0; }
+.pa-b b { display: block; font-size: 15px; font-weight: 600; line-height: 1.3; }
+.pa-b span { display: block; font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+.pa.late .pa-b span { color: #FF9A8A; }
+.pa-p { font-style: normal; font-size: 11px; font-weight: 800; color: #1A1A1A; background: #FF9A8A; border-radius: 6px; padding: 1px 6px; margin-right: 6px; vertical-align: 1px; }
+.pa-late { color: #FF9A8A; }
+.pa-more { border: 0; border-top: 1px solid var(--line); background: transparent; color: var(--act-ink); font: inherit; font-weight: 600; padding: 12px; }
+.fld { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; }
+.fld span { font-size: 12.5px; color: var(--muted); }
+.fld input { height: 46px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel2, #16191c); color: var(--ink); padding: 0 12px; font-size: 16px; }

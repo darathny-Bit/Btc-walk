@@ -58,6 +58,9 @@ The look and feel are in [DESIGN.md](DESIGN.md). What 2.0 adds:
 - **Amended:** a line changed after it was shipped keeps what it said before (`was`, `amendedAt`), and BTC prints both.
 - **Ship file:** `weather: { "<day>": { source, at, loc, hours: { "<h>": { t, ws, wd, cloud, mm, sym } } } }` with the forecast; entries add `wx`, `crew`, `lost`, `was`, `wasType`, `amendedAt`.
 
+## Your actions (2.8)
+⋮ › **Your actions**: the GitHub key and the team password (from whoever set up Phone packs in BTC), once. The home screen then shows **Your actions**: your open actions and chases from BTC (P1 and late first, ↗ chase, ↙ raised by, who else is on it), fetched from the private repo `darathny-Bit/btc-drop` on open and whenever the app comes back, unlocked on the phone (PBKDF2-SHA256 → AES-256-GCM; the same as BTC's `packLock`). The last pack is kept for no signal. Tick one done and it leaves the list (Undo for a few seconds); the tick goes with the next ship (`actionsDone: [{ id, file, at }]`), which counts as something to ship even on a day with no lines. Nothing about the job is in this repo: the repo name and the key are all the app knows until you type them.
+
 ## Weather that gets to BTC (2.7)
 A forecast that arrives after a day's lines were shipped used to stay on the phone. Now a day (last 14 days) whose forecast BTC never had, or an earlier day whose final forecast is newer than the one sent, counts as to ship on its own (**WEATHER TO SEND** in the ship sheet); each ship remembers what it sent (`wxsent:<project>:<day>`). ⋮ › Weather shows where it stands: the last forecast, MET Norway's answer if it refused (403, 429) or no signal, and how many days of weather are still to ship; tap it to **Try now**.
 
@@ -85,7 +88,7 @@ BTC Walk only talks to BTC through two files.
 { "format": "btcwalk", "v": 1, "project": { "id", "code", "name" }, "shippedBy": { "name", "handle" }, "shippedAt",
   "entries": [{ "id", "day", "time", "type": "note|flowon|action|itp", "raw", "text", "action", "who", "party", "dir" (chase|ours, 2.4), "area", "itp", "line", "tag",
                 "location", "priority", "due", "photos" ([data URL, …], 1.9), "photo" (the first, for BTC before 2.24), "edited" }],
-  "walks": [], "closures": [], "parties": [{ "name", "role", "contact" }] (new on this phone, 2.4) }
+  "walks": [], "closures": [], "actionsDone": [{ "id", "file", "at" }] (2.8), "parties": [{ "name", "role", "contact" }] (new on this phone, 2.4) }
 ```
 
 ## Updates (2.0.1)
