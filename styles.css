@@ -416,8 +416,11 @@ main.in-back { animation: in-back .24s var(--ease); }
 .pa-sw[data-dir=pass] .pa-bg { background: #3A2A12; color: #F2B65A; } .pa-sw[data-dir=pass] .pa-bd { visibility: hidden; }
 .pa-sw.go .pa-bg span { opacity: 1; transform: scale(1.08); }
 .pa { --age: 0; --tone: color-mix(in srgb, #C08A4A calc(var(--age) * 100%), #9B7BFF); position: relative; display: flex; flex-direction: column; gap: 3px; padding: 12px 14px;
-  background: color-mix(in srgb, var(--tone) 20%, #0E1112); border: 1px solid color-mix(in srgb, var(--tone) 42%, transparent); border-radius: 16px;   /* a touch of colour (2.14.2): violet when given, amber-brown at 7 days */ transition: transform .18s ease, border-color .8s ease, box-shadow .8s ease; }
-.pa-sw.fresh .pa { border-color: rgba(181,149,255,.55); box-shadow: 0 0 0 3px rgba(181,149,255,.10); gap: 4px; }
+  background: var(--panel); border: 1.5px solid color-mix(in srgb, var(--tone) 70%, transparent); border-radius: 16px;   /* colour in the edge only (2.14.3): violet when given, amber-brown at 7 days */ transition: transform .18s ease, border-color .8s ease, box-shadow .8s ease; }
+.pa-sw { overflow: visible; } .pa-sw .pa-bg { border-radius: 16px; overflow: hidden; }
+.pa-sw.fresh .pa { border: 2px solid #C4ABFF; background: color-mix(in srgb, #7B57E0 22%, #0E1112); box-shadow: 0 0 0 3px rgba(181,149,255,.22), 0 0 22px rgba(155,120,255,.55); gap: 4px; animation: pa-glow 2.4s ease-in-out infinite; }   /* NEW glows like the board (2.14.3) */
+@keyframes pa-glow { 50% { box-shadow: 0 0 0 4px rgba(181,149,255,.30), 0 0 30px rgba(155,120,255,.70); } }
+@media (prefers-reduced-motion: reduce) { .pa-sw.fresh .pa { animation: none; } }
 .pa-new { display: flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 600; color: #CDB8FF; }
 .pa-new i, .pa-age i { width: 7px; height: 7px; border-radius: 50%; background: #B595FF; flex: none; }
 .pa-sw.unglow .pa-new, .pa-sw.fresh .pa-age, .pa-sw.fresh .pa-m.bare { display: none; }
