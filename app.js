@@ -6,7 +6,7 @@
    (⋮ › Load project). No server, nothing sent anywhere else. */
 'use strict';
 (function () {
-  var VERSION = '2.9';
+  var VERSION = '2.9.1';
   var FORMAT = 'btcwalk', PFORMAT = 'btcproject';
 
   // ---------- the demo job (generic) ----------
@@ -975,8 +975,8 @@
   async function wxForecast(day) { return S.proj ? ((await kvGet('wxf:' + S.proj.project.id + ':' + day)) || null) : null; }
   // The day's weather, hour by hour: forecast hours (may be none) and the logged lines (from anyone) → one call per hour.
   function wxDay(fc, logs, extraHours) {
-    var hours = fc && fc.hours || {}, lo = 7, hi = 17;
-    (extraHours || []).forEach(function (h) { lo = Math.min(lo, h); hi = Math.max(hi, h); });
+    // a 12-hour window from 7am, for now (2.37.1 / Walk 2.9.1; shifts carparked: Darath, 25 Nov). extraHours is kept for later.
+    var hours = fc && fc.hours || {}, lo = 7, hi = 18;
     logs = (logs || []).filter(function (e) { return e.wx; }).slice().sort(function (a, b) { return a.time < b.time ? -1 : 1; });
     var hr = function (e) { return new Date(e.time).getHours(); };
     var wetter = logs.some(function (e) { return e.wx.sky && WET[e.wx.sky] && hours[hr(e)] && !WET[skyOf(hours[hr(e)])]; });
