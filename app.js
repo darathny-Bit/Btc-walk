@@ -6,7 +6,7 @@
    (⋮ › Load project). No server, nothing sent anywhere else. */
 'use strict';
 (function () {
-  var VERSION = '2.6';
+  var VERSION = '2.7';
   var FORMAT = 'btcwalk', PFORMAT = 'btcproject';
 
   // ---------- the demo job (generic) ----------
@@ -229,7 +229,8 @@
       var es = m[d].sort(function (a, b) { return a.time < b.time ? -1 : 1; });
       // changed since it was shipped (1.7): an edited line, or one deleted after shipping; ship again to bring BTC up to date
       var changed = !!gone[d] || es.some(function (e) { return !e.shipped && e.shippedAt; });
-      return { day: d, entries: es, unshipped: changed || es.some(function (e) { return !e.shipped; }), changed: changed, gone: gone[d] || 0 };
+      var lines = changed || es.some(function (e) { return !e.shipped; }), wxo = !!(S.wxOwed && S.wxOwed[d]);
+      return { day: d, entries: es, unshipped: lines || wxo, wxOnly: wxo && !lines, changed: changed, gone: gone[d] || 0 };
     });
   }
   function counts(es) { var c = { note: 0, flowon: 0, action: 0, itp: 0, photo: 0 }; es.forEach(function (e) { if (e.type === 'weather') return; c[e.type] = (c[e.type] || 0) + 1; c.photo += pics(e).length; }); return c; }
@@ -489,7 +490,7 @@
       var c = counts(es), noAct = es.filter(function (e) { return e.type === 'flowon' && !e.action; });
       var mb = (JSON.stringify(es).length / 1048576);
       sheet('<div class="grip"></div><div style="display:flex;flex-direction:column;gap:4px"><h2>Ship to BTC</h2><p>Goes by email to the job’s BTC inbox and files itself into your diary.</p></div>' +
-        '<div class="list">' + ds.map(function (d) { var cc = counts(d.entries); return '<label><input type="checkbox" data-pick="' + d.day + '"' + (S.shipPick[d.day] ? ' checked' : '') + '><span class="lt"><b>' + (d.day === today() ? 'Today · ' : '') + esc(dayLabel(d.day)) + (d.changed ? ' <span class="tag" style="color:var(--flow)">CHANGED</span>' : d.day < today() ? ' <span class="tag" style="color:var(--flow)">NOT SHIPPED</span>' : '') + '</b><span>' + d.entries.length + ' entr' + (d.entries.length === 1 ? 'y' : 'ies') + (cc.photo ? ' · ' + cc.photo + ' photo' + (cc.photo > 1 ? 's' : '') : '') + (d.gone ? ' · ' + d.gone + ' deleted' : '') + '</span></span></label>'; }).join('') + '</div>' +
+        '<div class="list">' + ds.map(function (d) { var cc = counts(d.entries); return '<label><input type="checkbox" data-pick="' + d.day + '"' + (S.shipPick[d.day] ? ' checked' : '') + '><span class="lt"><b>' + (d.day === today() ? 'Today · ' : '') + esc(dayLabel(d.day)) + (d.wxOnly ? ' <span class="tag" style="color:var(--note)">WEATHER TO SEND</span>' : '') + (d.changed ? ' <span class="tag" style="color:var(--flow)">CHANGED</span>' : d.day < today() ? ' <span class="tag" style="color:var(--flow)">NOT SHIPPED</span>' : '') + '</b><span>' + d.entries.length + ' entr' + (d.entries.length === 1 ? 'y' : 'ies') + (cc.photo ? ' · ' + cc.photo + ' photo' + (cc.photo > 1 ? 's' : '') : '') + (d.gone ? ' · ' + d.gone + ' deleted' : '') + '</span></span></label>'; }).join('') + '</div>' +
         '<div class="tiles"><div class="tile n"><b>' + c.note + '</b><span>notes</span></div><div class="tile f"><b>' + c.flowon + '</b><span>clashes</span></div><div class="tile a"><b>' + c.action + '</b><span>actions</span></div>' + (c.itp ? '<div class="tile i"><b>' + c.itp + '</b><span>ITP</span></div>' : '') + '</div>' +
         (noAct.length ? '<button type="button" class="bar-warn" data-fix="' + esc(noAct[0].id) + '" style="text-align:left">' + (noAct.length === 1 ? '1 clash has' : noAct.length + ' clashes have') + ' no action yet: <b>' + esc(noAct[0].text) + '</b><span style="margin-left:auto;color:var(--flow);font-weight:700;padding-right:8px">Fix ›</span></button>' : '') +
         '<button type="button" class="btn primary" data-act="doship"' + (pick.length ? '' : ' disabled') + ' style="min-height:56px;font-size:17px">Ship to Outlook</button>' +
@@ -543,6 +544,8 @@
     if (!shared) return;
     var at = new Date().toISOString();
     for (var i = 0; i < es.length; i++) { es[i].shipped = true; es[i].shippedAt = at; await putEntry(es[i]); }
+    for (var wd in wx) await kvSet('wxsent:' + S.proj.project.id + ':' + wd, wx[wd].at || at);   // BTC has this day's weather now (2.7)
+    await wxRecalc();
     if (gone.length) { S.gone = (S.gone || []).filter(function (g) { return !pickDays[g.day]; }); await kvSet('gone:' + S.proj.project.id, S.gone); }
     S.shipPick = null; buzz([12, 60, 12]); S.view = 'days'; render();
     if (shared === 'saved') { closeSheet(); toast('The phone wouldn’t share it, so it’s in Downloads: attach ' + name + ' to an email to ship it.', true); return; }
@@ -775,7 +778,8 @@
     var last = S.wx.at || 0; if (!force && Date.now() - last < 30 * 60000) return;
     try {
       var url = 'https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=' + (+loc.lat).toFixed(4) + '&lon=' + (+loc.lon).toFixed(4);
-      var res = await fetch(url, { cache: 'no-store' }); if (!res.ok) return;
+      var res = await fetch(url, { cache: 'no-store' });
+      if (!res.ok) { S.wx.err = 'MET Norway answered ' + res.status + (res.status === 403 ? ' (refused)' : res.status === 429 ? ' (too many requests)' : ''); S.wx.errAt = Date.now(); await kvSet('wx', S.wx); return false; }
       var j = await res.json(), ts = (j.properties && j.properties.timeseries) || [], byDay = {};
       ts.forEach(function (t) {
         var d = new Date(t.time), day = ymd(d), h = d.getHours(), det = (t.data.instant || {}).details || {}, n1 = t.data.next_1_hours || null;
@@ -794,11 +798,29 @@
       // the day starts with a forecast (2.2): the first time today's forecast arrives it's kept as it stood, never changed
       var snapKey = 'wxs:' + S.proj.project.id + ':' + t0, snap = await kvGet(snapKey);
       if (!snap) { var fct = await kvGet('wxf:' + S.proj.project.id + ':' + t0); if (fct) { var hs0 = wxDay(fct, [], []); await kvSet(snapKey, { at: new Date().toISOString(), sum: wxSummary(hs0), sky: mainSky(hs0) }); } }
-      S.wx.at = Date.now(); await kvSet('wx', S.wx);
+      S.wx.at = Date.now(); S.wx.err = ''; await kvSet('wx', S.wx);
+      await wxRecalc();
       if (S.view === 'day') renderDay(); else if (S.view === 'days') renderDays();
-    } catch (e) { /* no signal or the service is down: carry on without */ }
+      return true;
+    } catch (e) { S.wx.err = navigator.onLine ? 'MET Norway didn’t answer' : 'No signal'; S.wx.errAt = Date.now(); try { await kvSet('wx', S.wx); } catch (e2) { /* next time */ } return false; }   // carry on without, but say so in ⋮ › Weather (2.7)
   }
   function mainSky(hrs) { var wet = hrs.filter(function (x) { return WET[x.sky]; }); if (wet.length) return wet.sort(function (a, b) { return ['showers', 'rain', 'heavy'].indexOf(b.sky) - ['showers', 'rain', 'heavy'].indexOf(a.sky); })[0].sky; var c = hrs.filter(function (x) { return x.sky === 'cloudy'; }).length; return c > hrs.filter(function (x) { return x.sky === 'fine'; }).length ? 'cloudy' : hrs.some(function (x) { return x.sky; }) ? 'fine' : 'cloudy'; }
+  // Weather BTC hasn't had (2.7): a day with lines whose forecast never went in a ship (it arrived after the lines were
+  // shipped), or an earlier day whose final forecast is newer than the one sent. It makes the day "to ship" on its own.
+  async function wxRecalc() {
+    var owed = {};
+    if (S.proj && wxOn()) {
+      var t = today(), from = addDays(t, -14), seen = {};
+      for (var i = 0; i < S.entries.length; i++) {
+        var d = S.entries[i].day; if (seen[d] || d < from || d > t) continue; seen[d] = 1;
+        var fc = await wxForecast(d); if (!fc || !fc.hours || !Object.keys(fc.hours).length) continue;
+        var sent = await kvGet('wxsent:' + S.proj.project.id + ':' + d);
+        if (!sent || (d < t && String(sent) < String(fc.at || ''))) owed[d] = true;
+      }
+    }
+    var was = JSON.stringify(S.wxOwed || {}); S.wxOwed = owed;
+    if (was !== JSON.stringify(owed)) { if (S.view === 'days') renderDays(); }
+  }
   async function wxStart(day) { return S.proj ? ((await kvGet('wxs:' + S.proj.project.id + ':' + day)) || null) : null; }
   function wxRefresh() { if (S.view === 'day') renderDay(); }
   async function wxForecast(day) { return S.proj ? ((await kvGet('wxf:' + S.proj.project.id + ':' + day)) || null) : null; }
@@ -894,12 +916,21 @@
       '<div class="sec">Hour by hour</div><div class="list wxl">' + rows + '</div>' +
       '<p class="small">' + (w.fc ? 'The forecast is modelled weather from MET Norway (yr.no), not a reading on site. ' : 'No forecast for this day: only what was logged. ') + 'Type what it’s actually like (rainy, pissing down since lunch, 8 deg and gusty); it wins for what it says.</p>');
   }
+  // where the weather stands (2.7), so it never fails quietly
+  function wxStatus() {
+    if (!siteLoc()) return 'No site location: set it below, on site';
+    var last = S.wx.at ? 'Last forecast ' + dayLabel(ymd(new Date(S.wx.at))) + ' ' + hm(new Date(S.wx.at).toISOString()) : 'No forecast yet';
+    if (S.wx.err && (!S.wx.at || S.wx.errAt > S.wx.at)) return S.wx.err + ' at ' + hm(new Date(S.wx.errAt).toISOString()) + (S.wx.at ? ' · ' + last.toLowerCase() : '');
+    var owed = Object.keys(S.wxOwed || {}).length;
+    return last + (owed ? ' · ' + owed + ' day' + (owed === 1 ? '' : 's') + ' of weather to ship to BTC' : ' · BTC has it');
+  }
   function wxSettings() {
     var on = wxOn(), loc = siteLoc();
     sheet('<div class="grip"></div><h2>Weather</h2><p>BTC Walk can fill in each day’s weather from <b>MET Norway</b> (yr.no): free, credited, and allowed for work use. It’s a modelled forecast for the site; what you log on site wins.</p>' +
       '<p>MET Norway keeps the phone’s internet address and the site’s location in its logs. Nothing else about the job is sent. Its terms are a legal agreement for you to read and accept yourself: <a href="https://api.met.no/doc/TermsOfService" target="_blank" rel="noopener">api.met.no/doc/TermsOfService</a></p>' +
       '<div class="list">' + (on ? '<button type="button" data-act="wxoff"><span class="lt"><b>Weather is on</b><span>Accepted ' + esc(S.wx.acceptedAt ? dayLabel(S.wx.acceptedAt.slice(0, 10)) : '') + '. Tap to turn it off.</span></span></button>'
         : '<button type="button" data-act="wxon"><span class="lt"><b>I’ve read MET Norway’s terms and accept them</b><span>Turns weather on for this phone</span></span></button>') +
+      (on ? '<button type="button" data-act="wxtry"><span class="lt"><b>' + esc(wxStatus()) + '</b><span>Try now</span></span></button>' : '') +
       '<button type="button" data-act="wxhere"><span class="lt"><b>Site location: ' + (loc ? (+loc.lat).toFixed(3) + ', ' + (+loc.lon).toFixed(3) + ((S.proj.site && S.proj.site.lat != null) ? ' (project file)' : '') : 'not set') + '</b><span>Use where this phone is now (on site)</span></span></button></div>' +
       '<p class="small">Weather data: MET Norway, CC BY 4.0.</p>');
   }
@@ -1032,6 +1063,7 @@
     else if (act === 'wxdetail') wxDetail();
     else if (act === 'wxset') wxSettings();
     else if (act === 'wxon') { S.wx = Object.assign(S.wx || {}, { on: true, acceptedAt: new Date().toISOString() }); await kvSet('wx', S.wx); wxSettings(); if (!siteLoc()) toast('Now set the site location: tap “Use where this phone is now” on site.'); else wxFetch(true); }
+    else if (act === 'wxtry') { if (!navigator.onLine) { toast('No signal: try again when you have some.', true); return; } toast('Getting the forecast…'); var okw = await wxFetch(true); wxSettings(); toast(okw ? 'Forecast in. ' + (Object.keys(S.wxOwed || {}).length ? 'Ship to send it to BTC.' : 'BTC has it.') : (S.wx.err || 'No forecast') + '.', !okw); }
     else if (act === 'wxoff') { S.wx.on = false; await kvSet('wx', S.wx); wxSettings(); }
     else if (act === 'wxhere') {
       if (!navigator.geolocation) { toast('This phone can’t share its location here.', true); return; }
@@ -1129,7 +1161,7 @@
     S.wx = (await kvGet('wx')) || {};
     H.ready = true; history.replaceState({ walk: 'root' }, ''); render();
     if (!S.me && !p.demo) pickMe();
-    checkUpdate(); wxFetch();
+    checkUpdate(); wxFetch(); wxRecalc();
   })();
   // Swipe back on iPhone (1.2). A Home Screen app on iPhone has no swipe-back of its own, so BTC Walk does it: start at
   // the left edge and drag right, the same steps as Back on Android. Only in the Home Screen app on iPhone (in Safari,

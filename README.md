@@ -58,6 +58,9 @@ The look and feel are in [DESIGN.md](DESIGN.md). What 2.0 adds:
 - **Amended:** a line changed after it was shipped keeps what it said before (`was`, `amendedAt`), and BTC prints both.
 - **Ship file:** `weather: { "<day>": { source, at, loc, hours: { "<h>": { t, ws, wd, cloud, mm, sym } } } }` with the forecast; entries add `wx`, `crew`, `lost`, `was`, `wasType`, `amendedAt`.
 
+## Weather that gets to BTC (2.7)
+A forecast that arrives after a day's lines were shipped used to stay on the phone. Now a day (last 14 days) whose forecast BTC never had, or an earlier day whose final forecast is newer than the one sent, counts as to ship on its own (**WEATHER TO SEND** in the ship sheet); each ship remembers what it sent (`wxsent:<project>:<day>`). ⋮ › Weather shows where it stands: the last forecast, MET Norway's answer if it refused (403, 429) or no signal, and how many days of weather are still to ship; tap it to **Try now**.
+
 ## Compile a day (2.6)
 In a day, the page button (top right) compiles it as a site diary page in BTC's print colour: the job and who, the weather (the day's first forecast and what was logged), the lines in places with their photos three across, the clashes and actions raised, and a sign-off. **Share as PDF** opens the phone's print box (Save as PDF, or share it from there).
 
