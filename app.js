@@ -1,12 +1,11 @@
 /* BTC Walk: the phone's site diary for BTC.
    The day is the chat: open it and type. Notes, photos, clashes ("what changed ; what next") and actions (@person)
-   all go in the day's one chat. Ship sends the day (and any day not shipped yet) to BTC as one .btcwalk file through
-   the phone's share sheet (Outlook); BTC files it into your site diary.
-   Everything stays on this phone until it's shipped. The job comes from the project file BTC's Build makes
-   (⋮ › Load project). No server, nothing sent anywhere else. */
+   all go in the day's one chat. Close Day sends the day to BTC through btc-drop, locked with the team password; actions
+   go on their own straight away. BTC files it into your site diary. The job comes from btc-drop too (⋮ › Connect to
+   BTC), or by hand from the project file Build makes (⋮ › Load project). Nothing goes anywhere else. */
 'use strict';
 (function () {
-  var VERSION = '2.16.5';
+  var VERSION = '2.17';
   // iPhone (2.16.1): iOS 27 lays a frozen glass blur over the top of home-screen web apps, so on an iPhone or iPad the top
   // bar is taller, its buttons shifted down below the haze. Undo with the 'ios' class.
   if (/iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) document.documentElement.classList.add('ios');
@@ -256,7 +255,7 @@
     var wk = weekOf(t), wc = counts(wk.es), fn = firstName();
     var html = '<div class="hello"><div class="k">Week ' + weekNo(t) + ' · ' + dayDate(wk.from).getDate() + '–' + dayDate(wk.to).getDate() + ' ' + MO[dayDate(wk.to).getMonth()] + '</div><h1>' + greet() + (fn ? ',<br><span>' + esc(fn) + '.</span>' : '.') + '</h1><div id="wxnow"></div></div>' +
       '<div class="stats"><button type="button" class="stat" data-act="recap"><b>' + wk.es.length + '</b><span>lines this week</span></button><button type="button" class="stat" data-act="recap"><b>' + wc.photo + '</b><span>photos</span></button><button type="button" class="stat i" data-act="evidence"><b>' + itpLinesDone(wk.es) + '</b><span>ITP lines</span></button></div>';
-    if (S.proj.demo) html += '<div class="bar-info">Demo job (made-up names). Load your job’s project file in ⋮ › Load project. Nothing leaves this phone until you ship.</div>';
+    if (S.proj.demo) html += '<div class="bar-info">Demo job (made-up names). Connect to BTC in ⋮ and your job loads by itself.</div>';
     else if (age >= 7) html += '<div class="bar-warn">Project file is ' + age + ' days old<button type="button" data-act="load">Reload</button></div>';
     var chg = ds.filter(function (d) { return d.changed; }), today0 = ds.filter(function (d) { return d.day === t && d.unshipped; })[0];
     if (chg.length) html += '<div class="bar-warn">' + (chg.length === 1 ? (chg[0].day === t ? 'Today' : dayLabel(chg[0].day)) + ' changed' : chg.length + ' days changed') + ' since you shipped<button type="button" data-act="ship">Ship again</button></div>';
@@ -509,7 +508,7 @@
   // ---------- shipping through btc-drop (2.10) ----------
   // Ship and Close Day lock the day with the team password (packLock: the same crypto as BTC's, kept in step by hand) and
   // put it in btc-drop at inbox/<job hash>/<file>.lock; BTC (Actions) takes it in, files it like the BTC Inbox and removes
-  // it. No key, no password, no signal, or GitHub says no: the email/share way, as before.
+  // it. No key or password: false (set it up). No signal or GitHub says no: it throws and the day waits (shipLater).
   function b64(buf) { var s2 = '', a = new Uint8Array(buf); for (var i = 0; i < a.length; i += 0x8000) s2 += String.fromCharCode.apply(null, a.subarray(i, i + 0x8000)); return btoa(s2); }
   async function packLock(obj, pass) {
     var salt = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12));
@@ -609,7 +608,16 @@
     } catch (e) { /* no signal or GitHub said no: it goes with the next try or the next ship */ }
     finally { syncBusy = false; }
   }
-  window.addEventListener('online', function () { syncSoon(1000); });
+  window.addEventListener('online', function () { syncSoon(1000); shipLater(); });
+  // a day that couldn't go (no signal): sent by itself when the phone is back online or the app opens (2.17)
+  var shipLaterBusy = false;
+  async function shipLater() {
+    if (shipLaterBusy || !S.proj || S.proj.demo || !navigator.onLine) return;
+    var w = await kvGet('shipLater:' + S.proj.project.id); if (!w || !w.days || !w.days.length) return;
+    shipLaterBusy = true;
+    try { S.shipPick = {}; w.days.forEach(function (d) { S.shipPick[d] = true; }); S.closeReq = w.close || null; await doShip(); }
+    finally { shipLaterBusy = false; }
+  }
 
   // Done or passed on, on site (2.8; pass on 2.11): off the list now, to BTC with the next ship; Undo for 6 seconds puts it back
   async function packMark(pid, to) {
@@ -697,7 +705,7 @@
       var pick = ds.filter(function (d) { return S.shipPick[d.day]; }), es = []; pick.forEach(function (d) { es = es.concat(d.entries); });
       var c = counts(es), noAct = es.filter(function (e) { return e.type === 'flowon' && !e.action; });
       var mb = (JSON.stringify(es).length / 1048576);
-      sheet('<div class="grip"></div><div style="display:flex;flex-direction:column;gap:4px"><h2>Ship to BTC</h2><p>Goes by email to the job’s BTC inbox and files itself into your diary.</p></div>' +
+      sheet('<div class="grip"></div><div style="display:flex;flex-direction:column;gap:4px"><h2>Ship to BTC</h2><p>Goes straight to BTC and files itself into your diary.</p></div>' +
         '<div class="list">' + ds.map(function (d) { var cc = counts(d.entries); return '<label><input type="checkbox" data-pick="' + d.day + '"' + (S.shipPick[d.day] ? ' checked' : '') + '><span class="lt"><b>' + (d.day === today() ? 'Today · ' : '') + esc(dayLabel(d.day)) + (d.wxOnly ? ' <span class="tag" style="color:var(--note)">WEATHER TO SEND</span>' : '') + (d.changed ? ' <span class="tag" style="color:var(--flow)">CHANGED</span>' : d.day < today() ? ' <span class="tag" style="color:var(--flow)">NOT SHIPPED</span>' : '') + '</b><span>' + d.entries.length + ' entr' + (d.entries.length === 1 ? 'y' : 'ies') + (cc.photo ? ' · ' + cc.photo + ' photo' + (cc.photo > 1 ? 's' : '') : '') + (d.gone ? ' · ' + d.gone + ' deleted' : '') + '</span></span></label>'; }).join('') + '</div>' +
         '<div class="tiles"><div class="tile n"><b>' + c.note + '</b><span>notes</span></div><div class="tile f"><b>' + c.flowon + '</b><span>clashes</span></div><div class="tile a"><b>' + c.action + '</b><span>actions</span></div>' + (c.itp ? '<div class="tile i"><b>' + c.itp + '</b><span>ITP</span></div>' : '') + '</div>' +
         (noAct.length ? '<button type="button" class="bar-warn" data-fix="' + esc(noAct[0].id) + '" style="text-align:left">' + (noAct.length === 1 ? '1 clash has' : noAct.length + ' clashes have') + ' no action yet: <b>' + esc(noAct[0].text) + '</b><span style="margin-left:auto;color:var(--flow);font-weight:700;padding-right:8px">Fix ›</span></button>' : '') +
@@ -732,8 +740,6 @@
     var gone = (S.gone || []).filter(function (g) { return pickDays[g.day]; });
     var body = { format: FORMAT, v: 1, project: { id: S.proj.project.id, code: S.proj.project.code, name: S.proj.project.name }, shippedBy: { name: S.me ? S.me.name : '', handle: S.me ? S.me.handle : '' }, shippedAt: new Date().toISOString(), app: 'BTC Walk ' + VERSION,
       walks: [], entries: es.map(function (e) { return { id: e.id, day: e.day, time: e.time, type: e.type, raw: e.raw, text: e.text, action: e.action, who: e.who, party: e.party || '', dir: e.dir || '', area: e.area, itp: e.itp, line: e.line || '', tag: e.tag, location: e.location, priority: e.priority, due: e.due, photos: pics(e), photo: pics(e)[0] || '', edited: e.edited, wx: e.wx, crew: e.crew, lost: e.lost, was: e.was, wasType: e.wasType, amendedAt: e.amendedAt }; }), removed: gone.map(function (g) { return { id: g.id, day: g.day }; }), closures: [] };
-    // .btcwalk.txt as plain text (1.4.1): Android's share sheet refuses file types it doesn't know ("Permission denied"),
-    // and plain text is one it always takes. BTC reads .btcwalk and .btcwalk.txt alike.
     var wx = {}; for (var wi = 0; wi < pick.length; wi++) { var fc = await wxForecast(pick[wi].day), st0 = await wxStart(pick[wi].day); if (fc || st0) wx[pick[wi].day] = Object.assign({}, fc || { day: pick[wi].day, source: 'MET Norway', hours: {} }, st0 ? { start: st0 } : {}); }
     if (Object.keys(wx).length) body.weather = wx;
     if (CL) body.close = { date: CL.date, at: CL.at, sig: CL.sig, title: CL.title, reviewer: CL.reviewer };   // Close the day (2.9): signed here
@@ -741,21 +747,19 @@
     if (dn.some(function (d) { return d.to; })) body.actionsPassed = dn.filter(function (d) { return d.to; }).map(function (d) { return { id: d.id, file: d.file, at: d.at, to: d.to }; });   // swiped left, passed on (2.11)
     var np2 = (S.newParties || []).filter(function (x) { return !(S.proj.parties || []).some(function (y) { return key(y.name) === key(x.name); }); });
     if (np2.length) body.parties = np2.map(function (x) { return { name: x.name, role: x.role || '', contact: x.contact || '' }; });   // new to BTC (2.4)   // the forecast BTC needs to draw the job's weather (2.1); logged weather goes as lines
-    var name = fileName(pick), file = new File([JSON.stringify(body)], name, { type: 'text/plain' });
-    var save = function () { var a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = name; document.body.appendChild(a); a.click(); a.remove(); };
+    var name = fileName(pick);
+    // 2.17: btc-drop is the only way in: no email, share sheet or Downloads. No key: set it up. No signal or GitHub says
+    // no: the day waits (kv 'shipLater') and goes by itself when the phone is back online or the app opens.
     var shared = false;
-    try { if (await dropSend(body, name)) shared = 'drop'; }
-    catch (e0) { toast('Couldn’t send straight to BTC (' + e0.message + '): use email instead.', true); }
-    if (!shared) try {
-      if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: name, text: (S.proj.project.name || '') + ' · site diary from BTC Walk' }); shared = true; }
-      else { save(); shared = 'saved'; }
-    } catch (e) {
-      if (e && e.name === 'AbortError') { toast('Not shipped.'); return; }
-      // the phone wouldn't open the share sheet: save it instead, so the day isn't stuck
-      try { save(); } catch (e2) { toast('Could not ship: ' + e.message, true); return; }
-      shared = 'saved';
+    if (S.proj.demo) shared = 'demo';
+    else {
+      try { if (await dropSend(body, name)) shared = 'drop'; else { closeSheet(); toast('Set up sending first: ⋮ › Connect to BTC (the key and team password).', true); return; } }
+      catch (e0) {
+        await kvSet('shipLater:' + S.proj.project.id, { days: Object.keys(pickDays), close: CL || null, at: new Date().toISOString(), why: e0.message });
+        closeSheet(); toast((navigator.onLine ? 'Couldn’t reach BTC (' + e0.message + ')' : 'No signal') + ': it goes by itself as soon as it can.', true); return;
+      }
     }
-    if (!shared) return;
+    await kvSet('shipLater:' + S.proj.project.id, null);
     var at = new Date().toISOString();
     if (CL) { S.closed = Object.assign({}, S.closed || {}); S.closed[CL.date] = CL.at; await kvSet('closed:' + S.proj.project.id, S.closed); if (CL.reviewer) await kvSet('reviewer:' + S.proj.project.id, CL.reviewer); S.closeReq = null; }
     for (var i = 0; i < es.length; i++) { es[i].shipped = true; es[i].shippedAt = at; await putEntry(es[i]); }
@@ -764,7 +768,6 @@
     await wxRecalc();
     if (gone.length) { S.gone = (S.gone || []).filter(function (g) { return !pickDays[g.day]; }); await kvSet('gone:' + S.proj.project.id, S.gone); }
     S.shipPick = null; buzz([12, 60, 12]); S.view = 'days'; render();
-    if (shared === 'saved') { closeSheet(); toast('The phone wouldn’t share it, so it’s in Downloads: attach ' + name + ' to an email to ship it.', true); return; }
     S.sentDirect = shared === 'drop'; shippedSheet(pick, es); S.justClosed = null;
   }
 
@@ -840,7 +843,7 @@
     await takeProject(p);
   }
   // The job from btc-drop (2.14): Build sends it locked with the team password to projects/<job hash>.btcpack, so a phone
-  // with the key and password loads its job by itself, and keeps it up to date, with no file to email or pick.
+  // with the key and password loads its job by itself, and keeps it up to date, with no file to pick.
   async function takeProject(p, quiet) {
     if (quiet && S.proj && !S.proj.demo && S.proj.project.id === p.project.id) {   // the same job, newer: people, areas, ITPs and clashes update; your days stay
       p.loadedAt = new Date().toISOString(); await kvSet('project', p); S.proj = p; if (S.view === 'days') renderDays(); return;
@@ -891,7 +894,7 @@
       (p.demo ? '' : '<button type="button" data-act="pkset"><span class="lt"><b>Your actions: ' + (S.packCfg && S.packCfg.key ? 'on' : 'off') + '</b><span>Your open actions and chases from BTC</span></span></button>') +
       '<button type="button" data-act="wxset"><span class="lt"><b>Weather: ' + (wxOn() ? 'on' : 'off') + '</b><span>' + (wxOn() ? 'Forecast from MET Norway' + (siteLoc() ? '' : ' · set the site location') : 'Fill in each day’s weather from MET Norway') + '</span></span></button>' +
       (p.demo ? '' : '<button type="button" data-act="demo"><span class="lt"><b>Try the demo</b><span>A made-up job to practise on. Your job’s lines stay on the phone.</span></span></button>') + '</div>' +
-      '<div class="sec">On this phone</div>' + (function () { var o = oldShipped(); return o.length ? '<div class="list"><button type="button" data-act="clearold"><span class="lt"><b>Free up space</b><span>Clear ' + o.length + ' shipped line' + (o.length === 1 ? '' : 's') + ' older than a month (' + (JSON.stringify(o).length / 1048576).toFixed(1) + ' MB). They’re safe in BTC.</span></span></button></div>' : ''; })() + '<p>' + n + ' line' + (n === 1 ? '' : 's') + ' for this job. Nothing leaves the phone until you ship. Keep BTC Walk on your Home Screen (Safari › Share › Add to Home Screen) so the phone keeps them.</p>' +
+      '<div class="sec">On this phone</div>' + (function () { var o = oldShipped(); return o.length ? '<div class="list"><button type="button" data-act="clearold"><span class="lt"><b>Free up space</b><span>Clear ' + o.length + ' shipped line' + (o.length === 1 ? '' : 's') + ' older than a month (' + (JSON.stringify(o).length / 1048576).toFixed(1) + ' MB). They’re safe in BTC.</span></span></button></div>' : ''; })() + '<p>' + n + ' line' + (n === 1 ? '' : 's') + ' for this job. Lines stay on this phone until you close the day; actions go to BTC straight away. Keep BTC Walk on your Home Screen (Safari › Share › Add to Home Screen) so the phone keeps them.</p>' +
       '<div class="sec">How to write</div><p><b>plinth moved 25 mm ; shop drawing 25 mm shorter</b> is a clash (or use --). <b>@NH</b> makes it NH’s action; <b>P1</b>, <b>fri</b>, <b>28-11</b> set priority and due. <b>@SBR 1</b> or <b>@ITP-06</b> tags where it is; <b>at SBR 1</b> on its own moves you there. Tap <b>LOG AS</b> to change the type.</p>' +
       '<div class="sec">This app</div><div class="list"><button type="button" data-act="checkupd"><span class="lt"><b>BTC Walk ' + esc(VERSION) + '</b><span>' + (upd.seen && upd.seen !== VERSION ? 'Version ' + esc(upd.seen) + ' is out: tap to check again' : 'Check for an update') + '</span></span></button></div>');
   }
@@ -1497,7 +1500,7 @@
     } catch (e) { /* reload anyway */ }
     location.reload();
   }
-  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') { checkUpdate(); wxFetch(); packsLoad(true); } });
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') { checkUpdate(); wxFetch(); packsLoad(true); shipLater(); } });
   setInterval(function () { if (document.visibilityState === 'visible') checkUpdate(); }, 600000);
 
   // ---------- start ----------
@@ -1512,7 +1515,7 @@
     S.sig = (await kvGet('sig')) || ''; S.closed = (await kvGet('closed:' + p.project.id)) || {};
     H.ready = true; history.replaceState({ walk: 'root' }, ''); render();
     if (!S.me && !p.demo) pickMe();
-    checkUpdate(); wxFetch(); wxRecalc(); packsLoad(true);
+    checkUpdate(); wxFetch(); wxRecalc(); packsLoad(true); setTimeout(shipLater, 3000);
   })();
   // Swipe back on iPhone (1.2). A Home Screen app on iPhone has no swipe-back of its own, so BTC Walk does it: start at
   // the left edge and drag right, the same steps as Back on Android. Only in the Home Screen app on iPhone (in Safari,

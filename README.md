@@ -1,6 +1,6 @@
 # BTC Walk
 
-A site diary on your phone. Open it and type: notes, photos, clashes and actions all go into the day's one chat. When you're done, **Ship** sends the day to BTC as one file through your phone's share sheet (Outlook), and BTC files it into your site diary.
+A site diary on your phone. Open it and type: notes, photos, clashes and actions all go into the day's one chat. When you're done, **Close Day** sends the day straight to BTC through btc-drop (actions go on their own as soon as you type them), and BTC files it into your site diary.
 
 Everything stays on the phone until you ship. There's no server and no account: the app is static files, and your lines live in the phone's own storage.
 
@@ -59,7 +59,7 @@ The look and feel are in [DESIGN.md](DESIGN.md). What 2.0 adds:
 - **Ship file:** `weather: { "<day>": { source, at, loc, hours: { "<h>": { t, ws, wd, cloud, mm, sym } } } }` with the forecast; entries add `wx`, `crew`, `lost`, `was`, `wasType`, `amendedAt`.
 
 ## Straight to BTC (2.10)
-With the key and team password set (⋮ › Your actions; the key needs **Contents: read and write** on btc-drop), every ship is locked on the phone with the team password (the same lock as packs) and put in btc-drop at `inbox/<job hash>/<ship file name>.lock` (`dropSend`). The sheet says **Sent straight to BTC**; nothing to email. BTC's Actions checks that inbox every couple of minutes, files each day as it would from the BTC Inbox (a copy to `Processed/`) and deletes it from btc-drop. No key, no signal or GitHub saying no: it falls back to share / email, with the reason in a toast.
+With the key and team password set (⋮ › Connect to BTC / Your actions; the key needs **Contents: read and write** on btc-drop), every ship is locked on the phone with the team password (the same lock as packs) and put in btc-drop at `inbox/<job hash>/<ship file name>.lock` (`dropSend`). The sheet says **Sent straight to BTC**. BTC's Actions checks that inbox every couple of minutes, files each day into the diary (a copy in its `data/phone` folder) and deletes it from btc-drop. **btc-drop is the only way (2.17):** no key → "Set up sending first"; no signal or GitHub saying no → the day waits (`shipLater`) and goes by itself when the phone is back online or the app opens. No email, share sheet or Downloads.
 
 ## iPhone: a taller top bar (2.16.1)
 iOS 27 lays a hazy glass over the top of home-screen web apps. On an iPhone or iPad (the `ios` class on `<html>`) the top bar is taller: empty black under the haze, its buttons shifted down below it. Android and the PC are as before. Take the class away when Apple fixes it.
@@ -106,7 +106,7 @@ BTC Walk only talks to BTC through two files.
   "flowons": [{ "no", "area", "itp", "desc", "action" }] }
 ```
 
-**Ship file** (`<code>_<you>_<day>.btcwalk.txt`: JSON, named .txt because Android's share sheet only takes file types it knows; BTC reads `.btcwalk` and `.btcwalk.txt`), what Ship sends:
+**Ship file** (`<code>_<you>_<day>.btcwalk.txt`: JSON; the name is kept from when it went by email), what Close Day sends through btc-drop:
 ```
 { "format": "btcwalk", "v": 1, "project": { "id", "code", "name" }, "shippedBy": { "name", "handle" }, "shippedAt",
   "entries": [{ "id", "day", "time", "type": "note|flowon|action|itp", "raw", "text", "action", "who", "party", "dir" (chase|ours, 2.4), "area", "itp", "line", "tag",
