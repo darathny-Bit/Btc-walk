@@ -226,6 +226,7 @@ mark { background: rgba(212,255,58,.22); color: #E9FF9A; border-radius: 4px; pad
 .sheet-wrap { position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,.6); display: flex; flex-direction: column; justify-content: flex-end; }
 .sheet { max-height: 92dvh; overflow: auto; background: #0F1213; border-top: 1px solid rgba(255,255,255,.08); border-radius: 30px 30px 0 0; padding: 12px 20px calc(var(--safe-b) + 22px); display: flex; flex-direction: column; gap: 14px; box-shadow: 0 -20px 60px rgba(0,0,0,.6); }
 .grip { width: 40px; height: 5px; border-radius: 3px; background: #2A3033; align-self: center; flex: none; }
+.sheet > *, .list > * { flex-shrink: 0; }   /* 2.14.1: a tall sheet scrolls; its rows never squash into each other */
 .sheet h2 { margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -.03em; }
 .sheet p { margin: 0; font-size: 14px; color: var(--muted); line-height: 1.5; }
 .list { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 18px; background: #0A0C0D; overflow: hidden; }

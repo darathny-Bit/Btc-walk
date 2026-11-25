@@ -6,7 +6,7 @@
    (⋮ › Load project). No server, nothing sent anywhere else. */
 'use strict';
 (function () {
-  var VERSION = '2.14';
+  var VERSION = '2.14.1';
   var FORMAT = 'btcwalk', PFORMAT = 'btcproject';
 
   // ---------- the demo job (generic) ----------
@@ -677,7 +677,7 @@
   }
   function packsSettings() {
     var c = S.packCfg || {};
-    sheet('<div class="grip"></div><h2>Your actions</h2><p>Shows your open actions and chases from BTC, locked with the team password. Get the key and the password from whoever set up Phone packs in BTC (once).</p>' +
+    sheet('<div class="grip"></div><h2>' + (S.proj && S.proj.demo ? 'Connect to BTC' : 'Your actions') + '</h2><p>Your job, your open actions and chases come from BTC by themselves, locked with the team password. Get the key and the password from whoever set up Phone packs in BTC (once).</p>' +
       '<div class="list"><label class="fld"><span>GitHub key</span><input type="password" id="pk-key" autocomplete="off" placeholder="' + (c.key ? '•••• saved' : 'github_pat_…') + '"></label>' +
       '<label class="fld"><span>Team password</span><input type="text" id="pk-pass" autocomplete="off" autocapitalize="off" value="' + esc(c.pass || '') + '" placeholder="four words"></label></div>' +
       (S.packErr ? '<p class="small" style="color:var(--flow)">' + esc(S.packErr) + '</p>' : S.pack ? '<p class="small">Last from BTC ' + esc(dayLabel((S.pack.made || '').slice(0, 10))) + ' ' + hm(S.pack.made) + '.</p>' : '') +
@@ -878,7 +878,7 @@
   function settings() {
     var p = S.proj, made = p.made ? dayLabel(p.made.slice(0, 10)) : '', n = S.entries.length;
     sheet('<div class="grip"></div><h2>' + esc(p.project.name) + '</h2>' +
-      '<div class="list"><button type="button" data-act="load"><span class="lt"><b>Load project…</b><span>' + (p.demo ? 'The demo is loaded. Pick the file Build makes: ⋮ › Phone project file…' : 'Project file from ' + esc(made || '?') + '. Pick a newer one when the job changes.') + '</span></span></button>' +
+      '<div class="list">' + (p.demo ? '<button type="button" data-act="pkset"><span class="lt"><b>Connect to BTC</b><span>The key and team password: your job and your actions come by themselves</span></span></button>' : '') + '<button type="button" data-act="load"><span class="lt"><b>Load project…</b><span>' + (p.demo ? 'Or pick a job file by hand' : 'Project file from ' + esc(made || '?') + '. Pick a newer one when the job changes.') + '</span></span></button>' +
       '<button type="button" data-act="sendnow"><span class="lt"><b>Send now, without closing</b><span>Part-way through the day: photos and actions reach BTC now</span></span></button>' +
       '<button type="button" data-act="sigset"><span class="lt"><b>Your signature: ' + (S.sig ? 'set' : 'not set') + '</b><span>Draw it, or a photo of it on paper</span></span></button>' +
       '<button type="button" data-act="me"><span class="lt"><b>You: ' + esc(S.me ? S.me.name : 'not picked') + '</b><span>Whose diary your days go into</span></span></button>' +
