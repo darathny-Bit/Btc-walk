@@ -6,7 +6,7 @@
    (⋮ › Load project). No server, nothing sent anywhere else. */
 'use strict';
 (function () {
-  var VERSION = '2.13';
+  var VERSION = '2.14';
   var FORMAT = 'btcwalk', PFORMAT = 'btcproject';
 
   // ---------- the demo job (generic) ----------
@@ -528,6 +528,7 @@
     return true;
   }
   async function packsLoad(quiet) {
+    await projSync(false);   // the job itself first (2.14): new, or newer
     if (!S.proj || S.proj.demo || !S.me) return;
     var cfg = (await kvGet('packs')) || {}; S.packCfg = cfg;
     if (!S.pack) S.pack = (await kvGet('pack:' + S.proj.project.id)) || null;
@@ -832,13 +833,42 @@
     var p;
     try { p = JSON.parse(await file.text()); } catch (e) { toast('That isn’t a BTC project file.', true); return; }
     if (!p || p.format !== PFORMAT || !p.project || !p.project.id) { toast('That isn’t a BTC project file (make it in Build: ⋮ › Phone project file…).', true); return; }
+    await takeProject(p);
+  }
+  // The job from btc-drop (2.14): Build sends it locked with the team password to projects/<job hash>.btcpack, so a phone
+  // with the key and password loads its job by itself, and keeps it up to date, with no file to email or pick.
+  async function takeProject(p, quiet) {
+    if (quiet && S.proj && !S.proj.demo && S.proj.project.id === p.project.id) {   // the same job, newer: people, areas, ITPs and clashes update; your days stay
+      p.loadedAt = new Date().toISOString(); await kvSet('project', p); S.proj = p; if (S.view === 'days') renderDays(); return;
+    }
     p.loadedAt = new Date().toISOString();
     await kvSet('project', p); S.proj = p;
     S.entries = await allEntries(p.project.id); S.newParties = (await kvGet('parties:' + p.project.id)) || []; S.gone = (await kvGet('gone:' + p.project.id)) || [];
     var me = await kvGet('me:' + p.project.id); S.me = me || null; S.loc = null; await kvSet('loc', null);
     closeSheet(); S.view = 'days'; render();
     toast('Loaded ' + p.project.name + (p.made ? ' (from ' + dayLabel(p.made.slice(0, 10)) + ')' : '') + '.');
-    if (!S.me) pickMe();
+    if (!S.me) pickMe(); else packsLoad(true);
+  }
+  async function projSync(manual) {
+    var cfg = S.packCfg || (await kvGet('packs')) || {}; if (!cfg.key || !cfg.pass || !navigator.onLine) return;
+    if (!manual && S.proj && !S.proj.demo && Date.now() - (S.projAt || 0) < 10 * 60000) return;   // a job already here: look for a newer one every 10 minutes at most
+    S.projAt = Date.now();
+    var H = { Authorization: 'Bearer ' + cfg.key, 'X-GitHub-Api-Version': '2022-11-28' }, base = 'https://api.github.com/repos/' + PACK_REPO + '/contents/';
+    try {
+      var r = await fetch(base + 'projects', { headers: Object.assign({ Accept: 'application/vnd.github+json' }, H), cache: 'no-store' });
+      if (r.status === 404) { if (manual) toast('No job from BTC yet: in Build, ⋮ › Phone project file… sends it.', true); return; }
+      if (!r.ok) return;
+      var list = (await r.json()).filter(function (f) { return f.type === 'file' && /\.btcpack$/.test(f.name); }), jobs = [];
+      for (var i = 0; i < list.length; i++) {
+        try { var rr = await fetch(base + list[i].path, { headers: Object.assign({ Accept: 'application/vnd.github.raw' }, H), cache: 'no-store' }); if (!rr.ok) continue; var p = await packUnlock(await rr.text(), cfg.pass); if (p && p.format === PFORMAT && p.project && p.project.id) jobs.push(p); } catch (e) { /* not ours, or an old password */ }
+      }
+      if (!jobs.length) { if (manual) toast('No job from BTC opens with this team password.', true); return; }
+      var cur = S.proj && !S.proj.demo ? jobs.filter(function (j) { return j.project.id === S.proj.project.id; })[0] : null;
+      if (cur) { if ((cur.made || '') > (S.proj.made || '')) await takeProject(cur, true); return; }
+      if (S.proj && !S.proj.demo && !manual) return;   // a job loaded by hand that BTC doesn't send: leave it
+      if (jobs.length === 1) await takeProject(jobs[0]);
+      else { S.jobsFound = jobs; sheet('<div class="grip"></div><h2>Which job?</h2><p>BTC sends these to your team.</p><div class="list">' + jobs.map(function (j, k) { return '<button type="button" data-job="' + k + '"><span class="lt"><b>' + esc(j.project.name) + '</b><span>' + (j.people || []).length + ' people · ' + (j.areas || []).length + ' areas</span></span></button>'; }).join('') + '</div>'); }
+    } catch (e) { /* no signal: next time */ }
   }
   function pickMe() {
     var ps = (S.proj.people || []).filter(function (p) { return p.team !== false; });
@@ -1339,7 +1369,8 @@
       S.edit = e.id; S.photos = pics(e).slice(); S.as = e.type; renderDay(); var bx = $('box'); bx.focus(); return;
     }
     if (t.dataset.jump) { var j = S.entries.filter(function (x) { return x.id === t.dataset.jump; })[0]; if (!j) return; openDay(j.day); var el2 = document.querySelector('[data-e="' + j.id + '"]'); if (el2) { el2.scrollIntoView({ block: 'center' }); el2.classList.add('sel'); setTimeout(function () { el2.classList.remove('sel'); }, 1400); } return; }
-    if (t.dataset.me) { var pp = (S.proj.people || []).filter(function (x) { return x.handle === t.dataset.me; })[0]; S.me = { name: pp.name, handle: pp.handle }; await kvSet('me:' + S.proj.project.id, S.me); closeSheet(); toast('You’re ' + pp.name + '.'); render(); return; }
+    if (t.dataset.me) { var pp = (S.proj.people || []).filter(function (x) { return x.handle === t.dataset.me; })[0]; S.me = { name: pp.name, handle: pp.handle }; await kvSet('me:' + S.proj.project.id, S.me); closeSheet(); toast('You’re ' + pp.name + '.'); render(); S.pack = null; packsLoad(true); return; }
+    if (t.dataset.job != null) { var jb = (S.jobsFound || [])[+t.dataset.job]; S.jobsFound = null; if (jb) await takeProject(jb); return; }
     if (t.dataset.filter) { S.filter = t.dataset.filter; renderFindAll(); return; }
     if (t.dataset.fix) { closeSheet(); var fx = S.entries.filter(function (x) { return x.id === t.dataset.fix; })[0]; openDay(fx.day); S.edit = fx.id; S.as = 'flowon'; renderDay(); var bb = $('box'); bb.value = (fx.raw || fx.text) + ' ; '; bb.focus(); reads(); return; }
     var act = t.dataset.act;
@@ -1365,7 +1396,7 @@
       var c0 = (await kvGet('packs')) || {}, k0 = ($('pk-key') || {}).value || '', p0 = (($('pk-pass') || {}).value || '').trim();
       k0 = k0.trim(); if (k0) { if (!/^(github_pat_|ghp_)[A-Za-z0-9_]{20,}$/.test(k0)) { toast('That doesn’t look like a GitHub key (github_pat_…).', true); return; } c0.key = k0; }
       if (!c0.key || !p0) { toast('Both the key and the team password are needed.', true); return; }
-      c0.pass = p0; await kvSet('packs', c0); S.packCfg = c0; closeSheet(); toast('Getting your actions…'); await packsLoad(false); if (S.pack && !S.packErr) toast(packList().length + ' open for you');
+      c0.pass = p0; await kvSet('packs', c0); S.packCfg = c0; closeSheet(); toast('Getting your job from BTC…'); await projSync(true); if (!S.me || S.proj.demo) return; await packsLoad(false); if (S.pack && !S.packErr) toast(packList().length + ' open for you');
     }
     else if (act === 'wxon') { S.wx = Object.assign(S.wx || {}, { on: true, acceptedAt: new Date().toISOString() }); await kvSet('wx', S.wx); wxSettings(); if (!siteLoc()) toast('Now set the site location: tap “Use where this phone is now” on site.'); else wxFetch(true); }
     else if (act === 'wxtry') { if (!navigator.onLine) { toast('No signal: try again when you have some.', true); return; } toast('Getting the forecast…'); var okw = await wxFetch(true); wxSettings(); toast(okw ? 'Forecast in. ' + (Object.keys(S.wxOwed || {}).length ? 'Ship to send it to BTC.' : 'BTC has it.') : (S.wx.err || 'No forecast') + '.', !okw); }
