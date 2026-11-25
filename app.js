@@ -6,7 +6,7 @@
    (⋮ › Load project). No server, nothing sent anywhere else. */
 'use strict';
 (function () {
-  var VERSION = '2.12';
+  var VERSION = '2.13';
   var FORMAT = 'btcwalk', PFORMAT = 'btcproject';
 
   // ---------- the demo job (generic) ----------
@@ -650,11 +650,22 @@
     var t = today(), list = packList(), late = list.filter(function (a) { return a.due && a.due < t; }).length;
     list = list.slice().sort(function (a, b) { return (isFresh(b) ? 1 : 0) - (isFresh(a) ? 1 : 0); });   // NEW on top (2.12)
     var show = S.packAll ? list : list.slice(0, 4);
+    // Quiet cards (2.13): plain tiles like the rest of the app; age is a small dot and a day count, NEW a thin violet edge
+    var dueOf = function (a) {
+      if (!a.due) return { txt: '', cls: '' };
+      if (a.due < t) return { txt: Math.round((dayDate(t) - dayDate(a.due)) / 864e5) + 'd late', cls: ' late' };
+      if (a.due === t) return { txt: 'today', cls: ' today' };
+      var d = dayDate(a.due); return { txt: d.toLocaleDateString('en-NZ', { weekday: 'short' }) + ' ' + d.getDate(), cls: '' };
+    };
+    var ago = function (iso) { var m = Math.max(1, Math.round((Date.now() - new Date(iso)) / 60000)); return m < 60 ? m + ' min' : Math.round(m / 60) + ' h'; };
     var row = function (a) {
-      var nw = isFresh(a), ag = ageOf(a), giver = nw ? (S.proj.people || []).filter(function (p) { return p.handle === a.fresh.by; })[0] : null;
-      var chase = a.kind === 'chase', due = a.due ? (a.due < t ? 'late · ' : '') + dayLabel(a.due) : '';
-      return '<div class="pa-sw' + (nw ? ' fresh' : '') + '" data-pid="' + esc(a.id) + '"><div class="pa-bg"><span class="pa-bd">✓ Done</span><span class="pa-bp">Pass on ⇢</span></div><div class="pa' + (a.due && a.due < t ? ' late' : '') + '" style="--age:' + ag.toFixed(2) + '">' +
-        '<span class="pa-b">' + (nw ? '<i class="pa-new">' + (a.fresh.nudge ? 'NUDGED' : 'NEW') + '</i><em class="pa-from">' + esc(giver ? 'from ' + giver.name.split(' ')[0] : a.fresh.by ? 'from @' + a.fresh.by : '') + '</em>' : '') + '<b>' + (a.prio === 1 ? '<i class="pa-p">P1</i>' : '') + esc(a.title) + '</b><span>' + [chase ? '↗ chase ' + esc(a.waitingOn) : a.raisedBy ? '↙ from ' + esc(a.raisedBy) : '', a.with && a.with.length ? 'with ' + esc(a.with.map(function (x) { return '@' + x; }).join(' ')) : '', a.ref ? esc(a.ref) : '', due ? esc(due) : ''].filter(Boolean).join(' · ') + '</span></span></div></div>';
+      var nw = isFresh(a), ag = ageOf(a), days = a.given ? Math.max(0, Math.floor((Date.now() - new Date(a.given)) / 864e5)) : 0, du = dueOf(a);
+      var giver = nw ? (S.proj.people || []).filter(function (p) { return p.handle === a.fresh.by; })[0] : null, gname = giver ? giver.name.split(' ')[0] : a.fresh && a.fresh.by ? '@' + a.fresh.by : '';
+      var meta = [a.kind === 'chase' ? '↗ chase ' + esc(a.waitingOn) : a.raisedBy ? '↙ from ' + esc(a.raisedBy) : '', a.with && a.with.length ? 'with ' + esc(a.with.map(function (x) { return '@' + x; }).join(' ')) : '', a.ref ? esc(a.ref) : ''].filter(Boolean).join(' · ');
+      return '<div class="pa-sw' + (nw ? ' fresh' : '') + '" data-pid="' + esc(a.id) + '"><div class="pa-bg"><span class="pa-bd">✓ Done</span><span class="pa-bp">Pass on ⇢</span></div><div class="pa" style="--age:' + ag.toFixed(2) + '">' +
+        (nw ? '<div class="pa-new"><i></i>' + (a.fresh.nudge ? 'Nudged by ' : 'New from ') + esc(gname) + ' · ' + ago(a.fresh.at) + '</div>' : '') +
+        '<div class="pa-t"><b>' + (a.prio === 1 ? '<i class="pa-p">P1</i>' : '') + esc(a.title) + '</b>' + (du.txt ? '<span class="pa-due' + du.cls + '">' + du.txt + '</span>' : '') + '</div>' +
+        '<div class="pa-m' + (meta ? '' : ' bare') + '"><span>' + meta + '</span>' + '<span class="pa-age"><i></i>' + days + 'd</span>' + '</div></div></div>';
     };
     return '<div class="sec">Your actions' + (list.length ? ' · ' + list.length + (late ? ' · <span class="pa-late">' + late + ' late</span>' : '') : '') + '</div>' +
       (S.packErr && !S.pack ? '<div class="bar-warn">' + esc(S.packErr) + '</div>' : '') +
