@@ -24,12 +24,12 @@ input, textarea { font: inherit; }
 [hidden] { display: none !important; }
 
 /* top bar: frosted */
-.bar { flex: none; position: relative; z-index: 5; display: flex; align-items: center; gap: 8px; padding: calc(var(--safe-t) + 8px) 10px 8px 16px; min-height: 60px; background: #000; border-bottom: 1px solid var(--line2); }   /* 2.15.1: solid, and the page stays below the iPhone's status bar (newer iOS blurs whatever sits under it) */
+.bar { flex: none; position: relative; z-index: 5; display: flex; align-items: center; gap: 8px; padding: calc(max(var(--safe-t), 20px) + 14px) 10px 10px 16px; min-height: 60px; background: #000; border-bottom: 1px solid var(--line2); }   /* 2.15.2: newer iOS draws a home-screen app under the status bar and blurs that strip, so the bar sits clear below it, solid */
 .logo { width: 34px; height: 34px; border-radius: 11px; background: var(--lime); color: var(--lime-ink); display: inline-grid; place-items: center; font-size: 12.5px; font-weight: 800; letter-spacing: -.02em; }
 .app { display: none; }
-.proj { min-height: 34px; max-width: 170px; padding: 0 12px; border-radius: 12px; border: 0; background: var(--panel2); color: var(--ink); font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.proj { min-height: 34px; max-width: 170px; padding: 0 12px; border-radius: 12px; border: 0; background: var(--panel2); color: #FFFFFF; font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .fill { flex: 1; }
-.icon { width: 40px; height: 40px; border: 0; border-radius: 12px; background: var(--panel2); color: var(--ink2); display: inline-flex; align-items: center; justify-content: center; }
+.icon { width: 40px; height: 40px; border: 0; border-radius: 12px; background: #1B1F21; color: #FFFFFF; display: inline-flex; align-items: center; justify-content: center; }
 .icon.on { background: var(--lime-soft); color: var(--lime); }
 .dots { font-size: 20px; font-weight: 700; }
 
