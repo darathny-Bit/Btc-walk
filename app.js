@@ -5,7 +5,7 @@
    BTC), or by hand from the project file Build makes (⋮ › Load project). Nothing goes anywhere else. */
 'use strict';
 (function () {
-  var VERSION = '2.24';
+  var VERSION = '2.25';
   // iPhone (2.16.1): iOS 27 lays a frozen glass blur over the top of home-screen web apps, so on an iPhone or iPad the top
   // bar is taller, its buttons shifted down below the haze. Undo with the 'ios' class.
   if (/iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) document.documentElement.classList.add('ios');
@@ -492,14 +492,14 @@
       if (e && e.shippedAt && !e.was) { e.was = e.raw || e.text; e.wasType = e.type; }   // amended after shipping (2.1): BTC prints the original too
       if (e && e.shippedAt) e.amendedAt = new Date().toISOString();
       if (e) { Object.assign(e, { wx: p.wx, crew: p.crew, lost: p.lost }); Object.assign(e, { raw: raw, type: type, line: p.line, text: p.text || '', action: p.action, who: p.who, party: p.party || '', dir: p.dir || '', priority: p.priority, due: p.due, notFound: p.notFound, edited: true, shipped: false, synced: false, there: !!p.there }, p.there ? { area: p.area, itp: p.itp, tag: p.tag } : {}); e.photos = S.photos.slice(); delete e.photo; await putEntry(e); }
-      S.edit = null; S.photos = []; S.as = null; S.lastEdit = Date.now(); renderDay(); toast(e && closedDay(e.day) ? 'Saved. It goes to BTC by itself.' : 'Saved'); return;
+      S.edit = null; S.photos = []; S.as = null; S.lastEdit = Date.now(); if (e && e.synced && (e.type === 'action' || clashy(e.type))) syncSoon(6500); renderDay(); toast(e && closedDay(e.day) ? 'Saved. It goes to BTC by itself.' : 'Saved'); return;
     }
     if (type === 'itp' && p.itp && p.line) { S.lastLine = { itp: p.itp, line: p.line }; kvSet('lastLine:' + S.proj.project.id, S.lastLine); }
     var en = { id: uid(), proj: S.proj.project.id, day: S.day, time: now, raw: raw, type: type, line: p.line, text: p.text || '', action: p.action, who: p.who, party: p.party || '', dir: p.dir || '', area: p.there ? p.area : where.area || '', itp: p.there ? p.itp : where.itp || '', tag: p.there ? p.tag : where.tag || '',
       location: S.loc ? S.loc.name : '', priority: p.priority, due: p.due, photos: S.photos.slice(), edited: false, shipped: false, notFound: p.notFound, there: !!p.there };
     if (S.cx) en.cx = true;
     if (p.wx) en.wx = p.wx; if (p.crew) en.crew = p.crew; if (p.lost) en.lost = p.lost;
-    S.entries.push(en); await putEntry(en); S.lastEdit = Date.now(); if (type === 'action') syncSoon(6500);   // straight to BTC (2.12)
+    S.entries.push(en); await putEntry(en); S.lastEdit = Date.now(); if (type === 'action' || clashy(type)) syncSoon(6500);   // straight to BTC (2.12; clashes and forces 2.25)
     S.draft = ''; S.photos = []; S.as = null; S.fresh = en.id; buzz(8); renderDay(); S.fresh = null;
     var np = pics(en).length;
     if (type === 'weather') { wxRefresh(); toast('Weather logged: ' + wxWords(en.wx) + '. The rest of the day stays on the forecast.', false, { label: 'Undo', fn: async function () { S.entries = S.entries.filter(function (x) { return x.id !== en.id; }); await delEntry(en.id); if (S.view === 'day') renderDay(); } }); return; }
@@ -636,20 +636,22 @@
   }
   // Actions sync straight away (2.12): new action lines, done, passed on and seen go to BTC through btc-drop on their own, a
   // few seconds after (Undo first). Tiny files: no photos (an action line's photos go with Close Day), no notes, no weather.
+  // Clashes and forces go the same way (2.25), so Build (or Commission) has them within minutes; a line edited after it went
+  // goes again. Everything else, ITP evidence included, waits for Close Day.
   var syncT = null, syncBusy = false;
   function syncSoon(ms) { clearTimeout(syncT); syncT = setTimeout(syncActions, ms || 6500); }
   async function syncActions() {
     if (syncBusy || !S.proj || S.proj.demo || !S.me) return;
     var cfg = S.packCfg || (await kvGet('packs')) || {}; if (!cfg.key || !cfg.pass || !navigator.onLine) return;
     var old = function (iso) { return Date.now() - new Date(iso) > 6000; }, later = false;
-    var acts = S.entries.filter(function (e) { if (e.type !== 'action' || e.shipped || e.synced) return false; if (!old(e.amendedAt || e.time)) { later = true; return false; } return true; });
+    var acts = S.entries.filter(function (e) { if ((e.type !== 'action' && !clashy(e.type)) || e.shipped || (e.synced && !(e.amendedAt && e.amendedAt > e.synced))) return false; if (!old(e.amendedAt || e.time)) { later = true; return false; } return true; });
     var dn = (S.packDone || []).filter(function (d) { if (d.sent) return false; if (!old(d.at)) { later = true; return false; } return true; });
     var sn = (S.packSeen || []).filter(function (s) { return !s.sent; });
     if (later) syncSoon(3000);
     if (!acts.length && !dn.length && !sn.length) return;
     var body = { format: FORMAT, v: 1, kind: 'actions', project: { id: S.proj.project.id, code: S.proj.project.code, name: S.proj.project.name }, shippedBy: { name: S.me.name, handle: S.me.handle }, shippedAt: new Date().toISOString(), app: 'BTC Walk ' + VERSION,
       walks: [], removed: [], closures: [],
-      entries: acts.map(function (e) { return { id: e.id, day: e.day, time: e.time, type: e.type, raw: e.raw, text: e.text, action: e.action, who: e.who, party: e.party || '', dir: e.dir || '', area: e.area, itp: e.itp, line: e.line || '', tag: e.tag, location: e.location, priority: e.priority, due: e.due, photos: [], edited: e.edited, was: e.was, amendedAt: e.amendedAt }; }) };
+      entries: acts.map(function (e) { return { id: e.id, day: e.day, time: e.time, type: e.type, raw: e.raw, text: e.text, action: e.action, who: e.who, party: e.party || '', dir: e.dir || '', area: e.area, itp: e.itp, line: e.line || '', tag: e.tag, location: e.location, priority: e.priority, due: e.due, photos: [], edited: e.edited, was: e.was, amendedAt: e.amendedAt, cx: e.cx || undefined }; }) };
     var d1 = dn.filter(function (d) { return !d.to; }), d2 = dn.filter(function (d) { return d.to; });
     if (d1.length) body.actionsDone = d1.map(function (d) { return { id: d.id, file: d.file, at: d.at, p0: d.p0 }; });
     if (d2.length) body.actionsPassed = d2.map(function (d) { return { id: d.id, file: d.file, at: d.at, to: d.to }; });
