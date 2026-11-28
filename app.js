@@ -5,7 +5,7 @@
    BTC), or by hand from the project file Build makes (⋮ › Load project). Nothing goes anywhere else. */
 'use strict';
 (function () {
-  var VERSION = '2.20';
+  var VERSION = '2.21';
   // iPhone (2.16.1): iOS 27 lays a frozen glass blur over the top of home-screen web apps, so on an iPhone or iPad the top
   // bar is taller, its buttons shifted down below the haze. Undo with the 'ios' class.
   if (/iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) document.documentElement.classList.add('ios');
@@ -272,8 +272,12 @@
   }
   function counts(es) { var c = { note: 0, flowon: 0, force: 0, tagphoto: 0, action: 0, itp: 0, photo: 0 }; es.forEach(function (e) { if (e.type === 'weather') return; c[e.type] = (c[e.type] || 0) + 1; c.photo += pics(e).length; }); return c; }
   function dotsRow(c) { return '<span class="dots-row"><span><span class="dot-n">●</span>' + c.note + '</span><span><span class="dot-f">●</span>' + c.flowon + '</span>' + (c.force ? '<span><span class="dot-x">●</span>' + c.force + '</span>' : '') + (c.tagphoto ? '<span><span class="dot-t">●</span>' + c.tagphoto + '</span>' : '') + '<span><span class="dot-a">●</span>' + c.action + '</span>' + (c.itp ? '<span><span class="dot-i">●</span>' + c.itp + '</span>' : '') + (c.photo ? '<span class="muted">▣ ' + c.photo + '</span>' : '') + '</span>'; }
-  var RESHIP = '<span class="flag">✎ Changed · reship</span>';
-  var FLAG = '<span class="flag"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke-width="2.6" aria-hidden="true"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg>Not shipped</span>';
+  var RESHIP = '<span class="tag live">✎ Sending the change</span>';
+  var FLAG = '<span class="flag"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke-width="2.6" aria-hidden="true"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg>Not closed</span>';
+  // No Ship (2.21): today closes with Close Day, an earlier day with "Close Fri 27", and a closed day that changes sends
+  // itself (BTC gives the reviewer a card to sign again, with only what changed). ⋮ › Send now still sends part-way.
+  function closedDay(d) { return !!(S.closed || {})[d]; }
+  function toClose(ds, t) { var lim = addDays(t, -14); return ds.filter(function (d) { return d.day < t && d.day >= lim && !closedDay(d.day) && d.entries.some(function (e) { return e.type !== 'weather'; }); }); }
   var TICK = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>';
   function monday(d) { var x = dayDate(d), k = (x.getDay() + 6) % 7; x.setDate(x.getDate() - k); return ymd(x); }
   function weekNo(d) { var x = dayDate(d); x.setDate(x.getDate() + 3 - (x.getDay() + 6) % 7); var w1 = new Date(x.getFullYear(), 0, 4, 12); return 1 + Math.round(((x - w1) / 864e5 - 3 + (w1.getDay() + 6) % 7) / 7); }
@@ -290,19 +294,18 @@
       '<div class="stats"><button type="button" class="stat" data-act="recap"><b>' + wk.es.length + '</b><span>lines this week</span></button><button type="button" class="stat" data-act="recap"><b>' + wc.photo + '</b><span>photos</span></button><button type="button" class="stat i" data-act="evidence"><b>' + itpLinesDone(wk.es) + '</b><span>ITP lines</span></button></div>';
     if (S.proj.demo) html += '<div class="bar-info">Demo job (made-up names). Connect to BTC in ⋮ and your job loads by itself.</div>';
     else if (age >= 7) html += '<div class="bar-warn">Project file is ' + age + ' days old<button type="button" data-act="load">Reload</button></div>';
-    var chg = ds.filter(function (d) { return d.changed; }), today0 = ds.filter(function (d) { return d.day === t && d.unshipped; })[0];
-    if (chg.length) html += '<div class="bar-warn">' + (chg.length === 1 ? (chg[0].day === t ? 'Today' : dayLabel(chg[0].day)) + ' changed' : chg.length + ' days changed') + ' since you shipped<button type="button" data-act="ship">Ship again</button></div>';
-    else if (old.length) html += '<div class="bar-warn">' + (old.length === 1 ? dayLabel(old[0].day) + ' isn’t' : old.length + ' days aren’t') + ' shipped yet<button type="button" data-act="ship">Ship now</button></div>';
-    else if (ds.length && !waiting.length) html += '<div class="allclear"><i>' + TICK.replace('currentColor', '#7BE0A6') + '</i><div><b>All clear</b><span>Everything is shipped. Nothing waiting.</span></div></div>';
+    var open = toClose(ds, t).sort(function (a, b) { return a.day < b.day ? -1 : 1; }), sending = ds.filter(function (d) { return d.unshipped && closedDay(d.day); });
+    if (open.length) { var od = dayDate(open[0].day); html += '<div class="bar-warn">' + (open.length === 1 ? esc(dayLabel(open[0].day)) + ' isn’t closed' : open.length + ' days aren’t closed') + '<button type="button" data-act="closeday" data-v="' + open[0].day + '">Close ' + WD[od.getDay()] + ' ' + od.getDate() + '</button></div>'; }
+    else if (ds.length && !waiting.length) html += '<div class="allclear"><i>' + TICK.replace('currentColor', '#7BE0A6') + '</i><div><b>All clear</b><span>Everything is in BTC. Nothing waiting.</span></div></div>';
     html += packHtml();
     if (ds.length) html += '<div class="tools"><button type="button" class="tool i" data-act="evidence"><b>Evidence</b><span>Photos by ITP line</span></button><button type="button" class="tool" data-act="recap"><b>This week</b><span>Your week on the record</span></button></div>';
     var cutoff = addDays(t, -6), recent = ds.filter(function (d) { return d.day >= cutoff; }), earlier = ds.filter(function (d) { return d.day < cutoff; });
     var card = function (d) {
       var c = counts(d.entries), isT = d.day === t, dd = dayDate(d.day);
       var where = {}; d.entries.forEach(function (e) { var w = e.location || e.area; if (w) where[w] = 1; }); where = Object.keys(where).slice(0, 2).join(' · ');
-      return '<button type="button" class="day' + (isT ? ' today' : '') + (d.unshipped && !isT ? ' unshipped' : '') + '" data-day="' + d.day + '"><span class="day-n"><small>' + WD[dd.getDay()].toUpperCase() + '</small><b>' + dd.getDate() + '</b></span>' +
+      return '<button type="button" class="day' + (isT ? ' today' : '') + (d.unshipped && !isT && !closedDay(d.day) ? ' unshipped' : '') + '" data-day="' + d.day + '"><span class="day-n"><small>' + WD[dd.getDay()].toUpperCase() + '</small><b>' + dd.getDate() + '</b></span>' +
         '<span class="day-b"><span class="day-h"><span class="day-d">' + (isT ? 'Today' : esc(dayLabel(d.day))) + (where ? ' · ' + esc(where) : '') + '</span>' +
-        (d.changed ? RESHIP : isT ? (d.unshipped ? '<span class="tag live">Live</span>' : '<span class="tag sent">' + TICK + ' Sent</span>') : d.unshipped ? FLAG : '<span class="tag sent">' + TICK + ' Sent</span>') + '</span>' + dotsRow(c) + '</span></button>';
+        (d.unshipped && closedDay(d.day) ? RESHIP : isT ? (closedDay(d.day) ? '<span class="tag sent">' + TICK + ' Closed</span>' : '<span class="tag live">Live</span>') : closedDay(d.day) ? '<span class="tag sent">' + TICK + ' Closed</span>' : d.unshipped ? FLAG : '<span class="tag sent">' + TICK + ' Sent</span>') + '</span>' + dotsRow(c) + '</span></button>';
     };
     if (recent.length) html += '<div class="kick">This week</div>' + recent.map(card).join('');
     if (earlier.length) html += S.showEarlier ? '<div class="kick">Earlier</div>' + earlier.map(card).join('') : '<button type="button" class="day" data-act="earlier"><span class="muted small">Earlier · ' + earlier.length + ' day' + (earlier.length > 1 ? 's' : '') + (earlier.some(function (d) { return d.unshipped; }) ? '' : ', all sent') + ' ▸</span></button>';
@@ -310,8 +313,8 @@
     var hasT = ds.some(function (d) { return d.day === t; });
     var sc0 = main.querySelector('.scroll'), keepY = sc0 && sc0.querySelector('.hello') ? sc0.scrollTop : 0;   // a redraw keeps your place (2.12)
     main.innerHTML = '<div class="scroll"><div class="pad">' + html + '</div></div><div class="foot"><button type="button" class="btn primary" data-act="today">' + (hasT ? 'Open today' : '＋ Start day') + '</button>' +
-      (hasT && !(S.closed || {})[t] ? '<button type="button" class="btn ship" data-act="closeday">Close Day</button></div>'
-        : '<button type="button" class="btn ship' + (waiting.length ? '' : ' done') + '" data-act="ship">' + (hasT && (S.closed || {})[t] ? (waiting.length ? 'Send changes' : 'Closed') : 'Ship') + (waiting.length ? '<span class="count">' + waiting.length + '</span>' : '') + '</button></div>');
+      (!hasT ? '</div>' : !closedDay(t) ? '<button type="button" class="btn ship" data-act="closeday">Close Day</button></div>'
+        : '<button type="button" class="btn ship done" data-act="closedinfo">' + TICK + ' Closed</button></div>');
     if (keepY) { var sc1 = main.querySelector('.scroll'); if (sc1) sc1.scrollTop = keepY; }
     wxNow().then(function (h) { var sl = $('wxnow'); if (sl && S.view === 'days') sl.innerHTML = h; });
     watchSeen();
@@ -478,14 +481,14 @@
       if (e && e.shippedAt && !e.was) { e.was = e.raw || e.text; e.wasType = e.type; }   // amended after shipping (2.1): BTC prints the original too
       if (e && e.shippedAt) e.amendedAt = new Date().toISOString();
       if (e) { Object.assign(e, { wx: p.wx, crew: p.crew, lost: p.lost }); Object.assign(e, { raw: raw, type: type, line: p.line, text: p.text || '', action: p.action, who: p.who, party: p.party || '', dir: p.dir || '', priority: p.priority, due: p.due, notFound: p.notFound, edited: true, shipped: false, synced: false, there: !!p.there }, p.there ? { area: p.area, itp: p.itp, tag: p.tag } : {}); e.photos = S.photos.slice(); delete e.photo; await putEntry(e); }
-      S.edit = null; S.photos = []; S.as = null; renderDay(); toast('Saved'); return;
+      S.edit = null; S.photos = []; S.as = null; S.lastEdit = Date.now(); renderDay(); toast(e && closedDay(e.day) ? 'Saved. It goes to BTC by itself.' : 'Saved'); return;
     }
     if (type === 'itp' && p.itp && p.line) { S.lastLine = { itp: p.itp, line: p.line }; kvSet('lastLine:' + S.proj.project.id, S.lastLine); }
     var en = { id: uid(), proj: S.proj.project.id, day: S.day, time: now, raw: raw, type: type, line: p.line, text: p.text || '', action: p.action, who: p.who, party: p.party || '', dir: p.dir || '', area: p.there ? p.area : where.area || '', itp: p.there ? p.itp : where.itp || '', tag: p.there ? p.tag : where.tag || '',
       location: S.loc ? S.loc.name : '', priority: p.priority, due: p.due, photos: S.photos.slice(), edited: false, shipped: false, notFound: p.notFound, there: !!p.there };
     if (S.cx) en.cx = true;
     if (p.wx) en.wx = p.wx; if (p.crew) en.crew = p.crew; if (p.lost) en.lost = p.lost;
-    S.entries.push(en); await putEntry(en); if (type === 'action') syncSoon(6500);   // straight to BTC (2.12)
+    S.entries.push(en); await putEntry(en); S.lastEdit = Date.now(); if (type === 'action') syncSoon(6500);   // straight to BTC (2.12)
     S.draft = ''; S.photos = []; S.as = null; S.fresh = en.id; buzz(8); renderDay(); S.fresh = null;
     var np = pics(en).length;
     if (type === 'weather') { wxRefresh(); toast('Weather logged: ' + wxWords(en.wx) + '. The rest of the day stays on the forecast.', false, { label: 'Undo', fn: async function () { S.entries = S.entries.filter(function (x) { return x.id !== en.id; }); await delEntry(en.id); if (S.view === 'day') renderDay(); } }); return; }
@@ -655,6 +658,17 @@
   window.addEventListener('online', function () { syncSoon(1000); shipLater(); });
   // a day that couldn't go (no signal): sent by itself when the phone is back online or the app opens (2.17)
   var shipLaterBusy = false;
+  // A closed day that changes sends itself (2.21): a few seconds after the last edit, when there's signal; BTC files it and
+  // gives the reviewer a card to sign again. Nothing to press.
+  var autoBusy = false;
+  async function autoSend() {
+    if (autoBusy || !S.proj || S.proj.demo || !navigator.onLine || S.closeReq || (S.lastEdit && Date.now() - S.lastEdit < 5000)) return;
+    var ds = daysOf().filter(function (d) { return d.unshipped && closedDay(d.day); }); if (!ds.length) return;
+    autoBusy = true;
+    try { S.shipPick = {}; ds.forEach(function (d) { S.shipPick[d.day] = true; }); await doShip({ auto: true }); }
+    catch (e) { /* next time */ } finally { autoBusy = false; }
+  }
+  setInterval(autoSend, 6000);
   async function shipLater() {
     if (shipLaterBusy || !S.proj || S.proj.demo || !navigator.onLine) return;
     var w = await kvGet('shipLater:' + S.proj.project.id); if (!w || !w.days || !w.days.length) return;
@@ -757,24 +771,6 @@
   }
 
   // ---------- ship ----------
-  function shipSheet() {
-    var ds = daysOf().filter(function (d) { return d.unshipped; });
-    if (!ds.length) { toast('Everything is shipped.'); return; }
-    S.shipPick = S.shipPick || {}; ds.forEach(function (d) { if (S.shipPick[d.day] === undefined) S.shipPick[d.day] = true; });
-    var draw = function () {
-      var pick = ds.filter(function (d) { return S.shipPick[d.day]; }), es = []; pick.forEach(function (d) { es = es.concat(d.entries); });
-      var c = counts(es), noAct = es.filter(function (e) { return e.type === 'flowon' && !e.action; });
-      var mb = (JSON.stringify(es).length / 1048576);
-      sheet('<div class="grip"></div><div style="display:flex;flex-direction:column;gap:4px"><h2>Ship to BTC</h2><p>Goes straight to BTC and files itself into your diary.</p></div>' +
-        '<div class="list">' + ds.map(function (d) { var cc = counts(d.entries); return '<label><input type="checkbox" data-pick="' + d.day + '"' + (S.shipPick[d.day] ? ' checked' : '') + '><span class="lt"><b>' + (d.day === today() ? 'Today · ' : '') + esc(dayLabel(d.day)) + (d.wxOnly ? ' <span class="tag" style="color:var(--note)">WEATHER TO SEND</span>' : '') + (d.changed ? ' <span class="tag" style="color:var(--flow)">CHANGED</span>' : d.day < today() ? ' <span class="tag" style="color:var(--flow)">NOT SHIPPED</span>' : '') + '</b><span>' + d.entries.length + ' entr' + (d.entries.length === 1 ? 'y' : 'ies') + (cc.photo ? ' · ' + cc.photo + ' photo' + (cc.photo > 1 ? 's' : '') : '') + (d.gone ? ' · ' + d.gone + ' deleted' : '') + '</span></span></label>'; }).join('') + '</div>' +
-        '<div class="tiles"><div class="tile n"><b>' + c.note + '</b><span>notes</span></div><div class="tile f"><b>' + c.flowon + '</b><span>clashes</span></div><div class="tile a"><b>' + c.action + '</b><span>actions</span></div>' + (c.itp ? '<div class="tile i"><b>' + c.itp + '</b><span>ITP</span></div>' : '') + '</div>' +
-        (noAct.length ? '<button type="button" class="bar-warn" data-fix="' + esc(noAct[0].id) + '" style="text-align:left">' + (noAct.length === 1 ? '1 clash has' : noAct.length + ' clashes have') + ' no action yet: <b>' + esc(noAct[0].text) + '</b><span style="margin-left:auto;color:var(--flow);font-weight:700;padding-right:8px">Fix ›</span></button>' : '') +
-        '<button type="button" class="btn primary" data-act="doship"' + (pick.length ? '' : ' disabled') + ' style="min-height:56px;font-size:17px">Ship to Outlook</button>' +
-        '<span class="fname">' + esc(fileName(pick)) + ' · ' + (mb < 0.1 ? '<0.1' : mb.toFixed(1)) + ' MB</span>');
-      $('sheet').querySelectorAll('[data-pick]').forEach(function (cb) { cb.onchange = function () { S.shipPick[cb.dataset.pick] = cb.checked; draw(); }; });
-    };
-    draw();
-  }
   // The ship moment (2.0): a tick that draws itself, and where everything goes.
   function shippedSheet(pick, es) {
     var c = counts(es), ev = es.filter(function (e) { return e.type === 'itp'; }), evp = 0; ev.forEach(function (e) { evp += pics(e).length; });
@@ -782,7 +778,7 @@
     var who = {}; es.forEach(function (e) { if (e.type === 'action') String(e.who || 'you').split(/\s+/).forEach(function (h) { who[S.me && h === S.me.handle ? 'you' : h] = 1; }); });
     var row = function (col, label, sub, n) { return n ? '<div><span class="dotl" style="background:' + col + '"></span><span class="lt"><b>' + label + '</b>' + (sub ? '<span>' + esc(sub) + '</span>' : '') + '</span><span class="rv">' + n + '</span></div>' : ''; };
     sheet('<div class="grip"></div><div class="shipped"><div class="tickc"><svg width="54" height="54" viewBox="0 0 52 52" role="img" aria-label="Shipped"><circle class="ring-d" cx="26" cy="26" r="23" fill="none" stroke="#D4FF3A" stroke-width="3"/><path class="tick-d" d="M15 27l7 7 15-16" fill="none" stroke="#D4FF3A" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>' +
-      '<h2>' + (S.justClosed ? 'Day closed' : 'Shipped') + '</h2><p>' + (S.sentDirect ? '<b>Sent straight to BTC.</b> ' : '') + (S.justClosed ? 'Signed and on the way to BTC' + (S.justClosed.reviewer ? ', where ' + esc(S.justClosed.reviewer) + ' gets it to review and sign' : '') + '.<br>' : '') + (pick.length === 1 ? (pick[0].day === today() ? 'Today' : esc(dayLabel(pick[0].day))) + ' is' : pick.length + ' days are') + ' on the way to BTC.<br>It lands in your diary on the PC, and stays on this phone too.</p></div>' +
+      '<h2>' + (S.justClosed ? 'Day closed' : 'Sent') + '</h2><p>' + (S.sentDirect ? '<b>Sent straight to BTC.</b> ' : '') + (S.justClosed ? 'Signed and on the way to BTC' + (S.justClosed.reviewer ? ', where ' + esc(S.justClosed.reviewer) + ' gets it to review and sign' : '') + '.<br>' : '') + (pick.length === 1 ? (pick[0].day === today() ? 'Today' : esc(dayLabel(pick[0].day))) + ' is' : pick.length + ' days are') + ' on the way to BTC.<br>It lands in your diary on the PC, and stays on this phone too.</p></div>' +
       '<div class="list">' + row('var(--note)', 'Notes', '', c.note) + row('var(--itp)', 'ITP evidence', evp ? evp + ' photo' + (evp === 1 ? '' : 's') + (lines.length ? ' → ' + lines.slice(0, 2).join(', ') + (lines.length > 2 ? '…' : '') : ' to sort on the PC') : '', c.itp) +
       row('var(--flow)', 'Clashes', 'to Build’s register', c.flowon) + row('var(--act)', 'Actions', 'cards for ' + Object.keys(who).join(', '), c.action) + '</div>' +
       '<button type="button" class="btn primary" data-act="closesheet" style="min-height:54px">Done</button>');
@@ -792,7 +788,8 @@
     var n = new Date(), hhmm = String(n.getHours()).padStart(2, '0') + String(n.getMinutes()).padStart(2, '0');   // the time (1.7): each ship its own file
     return code + '_' + (S.me ? S.me.handle : 'X') + '_' + (days[days.length - 1] || today()) + (days.length > 1 ? '_' + days.length + 'days' : '') + '_' + hhmm + '.btcwalk.txt';
   }
-  async function doShip() {
+  async function doShip(opt) {
+    opt = opt || {};
     var CL = S.closeReq || null;
     var pick = daysOf().filter(function (d) { return (d.unshipped || (CL && d.day === CL.date)) && S.shipPick && S.shipPick[d.day]; });
     if (!pick.length) return;
@@ -813,10 +810,10 @@
     var shared = false;
     if (S.proj.demo) shared = 'demo';
     else {
-      try { if (await dropSend(body, name)) shared = 'drop'; else { closeSheet(); toast('Set up sending first: ⋮ › Connect to BTC (the key and team password).', true); return; } }
+      try { if (await dropSend(body, name)) shared = 'drop'; else { if (!opt.auto) { closeSheet(); toast('Set up sending first: ⋮ › Connect to BTC (the key and team password).', true); } return; } }
       catch (e0) {
         await kvSet('shipLater:' + S.proj.project.id, { days: Object.keys(pickDays), close: CL || null, at: new Date().toISOString(), why: e0.message });
-        closeSheet(); toast((navigator.onLine ? 'Couldn’t reach BTC (' + e0.message + ')' : 'No signal') + ': it goes by itself as soon as it can.', true); return;
+        if (!opt.auto) { closeSheet(); toast((navigator.onLine ? 'Couldn’t reach BTC (' + e0.message + ')' : 'No signal') + ': it goes by itself as soon as it can.', true); } return;
       }
     }
     await kvSet('shipLater:' + S.proj.project.id, null);
@@ -827,7 +824,9 @@
     if (dn.length) { S.packDone = (S.packDone || []).map(function (d) { return d.sent ? d : Object.assign({}, d, { sent: at }); }); await kvSet('packDone:' + S.proj.project.id, S.packDone); }
     await wxRecalc();
     if (gone.length) { S.gone = (S.gone || []).filter(function (g) { return !pickDays[g.day]; }); await kvSet('gone:' + S.proj.project.id, S.gone); }
-    S.shipPick = null; buzz([12, 60, 12]); S.view = 'days'; render();
+    S.shipPick = null;
+    if (opt.quiet || opt.auto) { if (S.view === 'days') renderDays(); toast(opt.auto ? 'Change sent to BTC: your reviewer signs it again.' : 'Sent to BTC: ' + (pick.length === 1 ? (pick[0].day === today() ? 'today' : dayLabel(pick[0].day)) : pick.length + ' days') + '. Close the day when you’re done.'); return; }
+    buzz([12, 60, 12]); S.view = 'days'; render();
     S.sentDirect = shared === 'drop'; shippedSheet(pick, es); S.justClosed = null;
   }
 
@@ -1122,13 +1121,13 @@
     var busiest = per.slice().sort(function (a, b) { return b.n - a.n; })[0], places = {};
     es.forEach(function (e) { var w = e.location || e.area; if (w) places[w] = (places[w] || 0) + 1; });
     var top = Object.keys(places).sort(function (a, b) { return places[b] - places[a]; })[0];
-    var ds = daysOf().filter(function (d) { return d.day >= wk.from && d.day <= wk.to; }), waiting = ds.filter(function (d) { return d.unshipped; }).length;
-    var note = es.length ? 'Busiest day ' + ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayDate(busiest.d).getDay()] + (top ? ', mostly at ' + top : '') + '. ' + (waiting ? waiting + ' day' + (waiting === 1 ? '' : 's') + ' not shipped yet.' : 'Every day shipped.') : 'Nothing logged this week yet.';
+    var ds = daysOf().filter(function (d) { return d.day >= wk.from && d.day <= wk.to; }), waiting = toClose(ds, today()).length;
+    var note = es.length ? 'Busiest day ' + ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayDate(busiest.d).getDay()] + (top ? ', mostly at ' + top : '') + '. ' + (waiting ? waiting + ' day' + (waiting === 1 ? '' : 's') + ' not closed yet.' : 'Every day closed.') : 'Nothing logged this week yet.';
     var html = '<div class="hello"><div class="k">' + (dayDate(t).getDay() === 5 ? 'Friday · ' : '') + 'Week ' + weekNo(t) + '</div><h1>Your week,<br><span>on the record.</span></h1></div>' +
       '<div class="recap"><div class="bars">' + per.map(function (p) { return '<div><div class="bh"><div class="b' + (p.n && p.n === mx ? ' top' : '') + '" style="height:' + (mx ? Math.max(4, Math.round(90 * p.n / mx)) : 4) + 'px"></div></div><small>' + WD[dayDate(p.d).getDay()].charAt(0) + '</small></div>'; }).join('') + '</div>' +
       '<div class="rstats"><div><b>' + es.length + '</b><span>lines logged</span></div><div><b>' + c.photo + '</b><span>photos</span></div><div><b style="color:var(--itp)">' + itpLinesDone(es) + '</b><span>ITP lines evidenced</span></div><div><b style="color:var(--flow)">' + c.flowon + '</b><span>clashes caught early</span></div></div>' +
       '<div class="rnote">' + esc(note) + '</div></div>' +
-      (waiting ? '<div class="bar-warn">' + waiting + ' day' + (waiting === 1 ? '' : 's') + ' waiting to ship<button type="button" data-act="ship">Ship</button></div>' : es.length ? '<div class="allclear"><i>' + TICK.replace('currentColor', '#7BE0A6') + '</i><div><b>All clear</b><span>Everything is shipped. Nothing waiting.</span></div></div>' : '');
+      (waiting ? '<div class="bar-warn">' + waiting + ' day' + (waiting === 1 ? '' : 's') + ' not closed<button type="button" data-act="ship">Close</button></div>' : es.length ? '<div class="allclear"><i>' + TICK.replace('currentColor', '#7BE0A6') + '</i><div><b>All clear</b><span>Everything is in BTC. Nothing waiting.</span></div></div>' : '');
     main.innerHTML = '<div class="dhead noprint">' + '<button type="button" class="icon" data-act="back" aria-label="Back"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>' + '<span class="t"><b>This week</b><span>' + esc(dayLabel(wk.from)) + ' – ' + esc(dayLabel(wk.to)) + '</span></span></div><div class="scroll"><div class="pad">' + html + '</div></div>' +
       '<div class="foot"><button type="button" class="btn" data-act="print">Share as PDF</button>' + (!(S.closed || {})[d] ? '<button type="button" class="btn primary" data-act="closeday" data-v="' + d + '">Close Day</button>' : '<button type="button" class="btn primary" data-act="back">Done</button>') + '</div>';
   }
@@ -1319,7 +1318,7 @@
     var last = S.wx.at ? 'Last forecast ' + dayLabel(ymd(new Date(S.wx.at))) + ' ' + hm(new Date(S.wx.at).toISOString()) : 'No forecast yet';
     if (S.wx.err && (!S.wx.at || S.wx.errAt > S.wx.at)) return S.wx.err + ' at ' + hm(new Date(S.wx.errAt).toISOString()) + (S.wx.at ? ' · ' + last.toLowerCase() : '');
     var owed = Object.keys(S.wxOwed || {}).length;
-    return last + (owed ? ' · ' + owed + ' day' + (owed === 1 ? '' : 's') + ' of weather to ship to BTC' : ' · BTC has it');
+    return last + (owed ? ' · ' + owed + ' day' + (owed === 1 ? '' : 's') + ' of weather to send to BTC' : ' · BTC has it');
   }
   function wxSettings() {
     var on = wxOn(), loc = siteLoc();
@@ -1494,9 +1493,10 @@
     else if (act === 'update') doUpdate();
     else if (act === 'checkupd') { closeSheet(); checkUpdate(true); }
     else if (act === 'earlier') { S.showEarlier = true; renderDays(); }
-    else if (act === 'ship') shipSheet();
+    else if (act === 'ship') { var oc = toClose(daysOf(), today()); closeDaySheet(oc.length ? oc[0].day : today()); }
+    else if (act === 'closedinfo') toast('Closed and in BTC. A change you make now goes by itself' + ((S.closed || {})[today()] ? ' and your reviewer signs again' : '') + '.');
     else if (act === 'closeday') { closeSheet(); closeDaySheet(t.dataset.v || today()); }
-    else if (act === 'sendnow') { closeSheet(); shipSheet(); }
+    else if (act === 'sendnow') { closeSheet(); var sn = daysOf().filter(function (d) { return d.unshipped; }); if (!sn.length) { toast('Nothing new to send: BTC has it all.'); return; } S.shipPick = {}; sn.forEach(function (d) { S.shipPick[d.day] = true; }); await doShip({ quiet: true, why: 'now' }); }
     else if (act === 'closeprev') { closeSheet(); S.day = t.dataset.v; S.view = 'dayprint'; S.fromClose = true; render(); }
     else if (act === 'doclose') doClose(t.dataset.v);
     else if (act === 'sigset') sigSheet();
@@ -1520,7 +1520,7 @@
     else if (act === 'unloc') { S.loc = null; await kvSet('loc', null); renderDay(); }
     else if (act === 'cancel') { S.edit = null; S.as = null; S.photos = []; renderDay(); }
     else if (act === 'delete') { var dl = S.edit; var gel = document.querySelector('[data-e="' + dl + '"]'); if (gel && MOTION) { gel.style.height = gel.offsetHeight + 'px'; void gel.offsetWidth; gel.classList.add('gone'); await new Promise(function (r) { setTimeout(r, 200); }); } var dx = S.entries.filter(function (x) { return x.id === dl; })[0]; S.entries = S.entries.filter(function (x) { return x.id !== dl; }); await delEntry(dl);
-      if (dx && dx.shippedAt) { S.gone = (S.gone || []).concat([{ id: dl, day: dx.day }]); await kvSet('gone:' + S.proj.project.id, S.gone); }   // shipped already: BTC takes it out next ship
+      if (dx && dx.shippedAt) { S.gone = (S.gone || []).concat([{ id: dl, day: dx.day }]); await kvSet('gone:' + S.proj.project.id, S.gone); S.lastEdit = Date.now(); }   // shipped already: BTC takes it out next ship
       S.edit = null; S.photos = []; renderDay(); buzz(6);
       toast(dx && dx.shippedAt ? 'Deleted. Ship again to take it out of BTC.' : 'Deleted', false, dx ? { label: 'Undo', fn: async function () {
         S.entries.push(dx); await putEntry(dx);
