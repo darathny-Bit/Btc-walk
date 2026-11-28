@@ -5,7 +5,7 @@
    BTC), or by hand from the project file Build makes (⋮ › Load project). Nothing goes anywhere else. */
 'use strict';
 (function () {
-  var VERSION = '2.18';
+  var VERSION = '2.19';
   // iPhone (2.16.1): iOS 27 lays a frozen glass blur over the top of home-screen web apps, so on an iPhone or iPad the top
   // bar is taller, its buttons shifted down below the haze. Undo with the 'ios' class.
   if (/iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) document.documentElement.classList.add('ios');
@@ -15,6 +15,7 @@
   var DEMO = {
     format: PFORMAT, v: 1, made: null, demo: true,
     project: { id: 'demo-dragon', code: 'DRAGON', name: 'Dragon WWTP (demo)' },
+    tags: ['S1-AIT-420', 'S1-LIT-421', 'S1-XV-411', 'S2-LIT-422', 'BL-B-201'],   // made-up plant tags: @ offers them in commissioning mode
     people: [{ name: 'Sam Rivers', handle: 'SR', team: true, role: 'Commissioning Manager' }, { name: 'Alex Kerr', handle: 'AK', team: true, role: 'Lead Commissioning Engineer' }, { name: 'Nikau Hale', handle: 'NH', team: true, role: 'Commissioning Engineer' }, { name: 'Jo Tamati', handle: 'JT', team: true, role: 'Automation Engineer' }, { name: 'Pat Lee', handle: 'PL', team: false }],
     parties: [{ name: 'Beca', contact: 'Pat Lee', role: 'Engineer' }, { name: 'DDC', contact: '', role: 'Client' }],
     areas: [
@@ -80,7 +81,7 @@
   function places() {
     var p = S.proj, out = [];
     (p.areas || []).forEach(function (a) { out.push({ kind: 'area', name: a.name, area: a.name, itp: '' }); (a.itps || []).forEach(function (i) { out.push({ kind: 'itp', name: i.code, area: a.name, itp: i.code, sub: i.title }); }); });
-    (p.tags || []).forEach(function (t) { out.push({ kind: 'tag', name: t, tag: t }); });
+    if (S.cx) (p.tags || []).forEach(function (t) { out.push({ kind: 'tag', name: t, tag: t }); });   // plant tags: commissioning mode only (2.19)
     return out;
   }
   var key = function (s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ''); };
@@ -119,7 +120,7 @@
   // PC. @clash is the same as clash. (and the old @flow-on).
   // 2.1: delay. (lost time, "2h"), instruction. (EI/SI, who gave it with @), crew. (who's on site, "HEB 6, sparkies 4"),
   // visitor. and weather. (or a weather word on its own line: rainy, fine, windy…).
-  var LEAD = /^(note|action|clash|flow(?:-?on)?|itp|delay|instruction|instr|ei|si|crew|labour|visitor|visit|weather|wx)\.(?=\s|$)\s*/i;
+  var LEAD = /^(note|action|clash|force|bridge|flow(?:-?on)?|itp|delay|instruction|instr|ei|si|crew|labour|visitor|visit|weather|wx)\.(?=\s|$)\s*/i;
   var LEADMAP = { delay: 'delay', instruction: 'instruction', instr: 'instruction', ei: 'instruction', si: 'instruction', crew: 'crew', labour: 'crew', visitor: 'visitor', visit: 'visitor', weather: 'weather', wx: 'weather' };
   // 2.3: a line only about the weather is weather, however it's said ("pissing down since lunch", "8 deg and blowing a gale").
   // Every word has to be a weather word, a small word, a time or a number with a unit; at least one has to say something.
@@ -161,7 +162,7 @@
     var text = String(raw || '').trim(), out = { type: 'note', text: '', action: '', who: '', area: '', itp: '', tag: '', line: '', priority: '', due: '', move: null, notFound: [], forced: '' };
     if (!text) return out;
     var ld = LEAD.exec(text);
-    if (ld) { var w = ld[1].toLowerCase(); out.forced = LEADMAP[w] || (w === 'itp' ? 'itp' : /^(flow|clash)/.test(w) ? 'flowon' : w); text = text.slice(ld[0].length); }
+    if (ld) { var w = ld[1].toLowerCase(); out.forced = LEADMAP[w] || (w === 'itp' ? 'itp' : /^(flow|clash|force|bridge)/.test(w) ? 'flowon' : w); text = text.slice(ld[0].length); }
     else if (isWxLine(text)) out.forced = 'weather';
     if (out.forced === 'weather' || out.forced === 'crew') { out.type = out.forced; out.text = text; if (out.forced === 'weather') out.wx = wxParse(text); else out.crew = crewOf(text); return out; }
     text = text.replace(/(^|\s)@(clash|flow-?on)\b/i, function () { if (!out.forced) out.forced = 'flowon'; return ' '; }).trim();
@@ -169,7 +170,7 @@
     var mv = /^at\s+(.+)$/i.exec(text);
     if (mv) { var p0 = placeAt('@' + mv[1].trim(), 0); if (p0 && p0.len >= mv[1].trim().length - 1) { out.move = p0.place; return out; } }
     // @ who or where
-    var i = 0, people = [], place = null, party = null, dirWord = '';
+    var i = 0, people = [], place = null, party = null, dirWord = '', ptag = '';
     while ((i = text.indexOf('@', i)) >= 0) {
       if (i > 0 && /\S/.test(text.charAt(i - 1))) { i++; continue; }
       var pl = placeAt(text, i);
@@ -188,6 +189,8 @@
         if (pre) dirWord = pre[2].toLowerCase() === 'chase' ? 'chase' : 'ours';
         text = (text.slice(0, st) + text.slice(i + m[0].length)).replace(/\s{2,}/g, ' '); i = st; continue;
       }
+      // commissioning (2.19): an @ with a number in it is a plant tag (@S1-LIT-421); Commission files it on that tag
+      if (m && S.cx && !ptag && /\d/.test(mh) && /^[a-z0-9][a-z0-9.\/_-]*$/i.test(mh) && mh.length >= 3) { ptag = mh.toUpperCase(); text = (text.slice(0, i) + text.slice(i + m[0].length)).replace(/\s{2,}/g, ' '); continue; }
       if (m) out.notFound.push(m[1]);
       i++;
     }
@@ -204,6 +207,9 @@
     if (out.type === 'flowon' && lead && sep) out.text = out.text.replace(/^(clash|flow-?on|bridge)\b[:\s]*/i, '');
     out.who = people.map(function (p) { return p.handle; }).filter(function (h, k, a) { return a.indexOf(h) === k; }).join(' ');   // one or more (1.7): @AK @SR is 'AK SR'
     if (place) { out.area = place.area || ''; out.itp = place.itp || ''; out.tag = place.tag || ''; out.there = true; }
+    if (ptag) { out.tag = ptag; out.area = out.area || ''; out.there = true; }
+    if (S.cx && !out.tag) { var tw = /(?:^|\s)([A-Za-z0-9]+-[A-Za-z0-9-]*\d[A-Za-z0-9-]*)(?=[\s,.;:]|$)/.exec(out.text); if (tw) { out.tag = tw[1].toUpperCase(); out.there = true; } }   // a tag in the words (S1-AIT-420) counts too
+    if (S.cx && out.type === 'flowon') out.type = 'force';   // commissioning: a clash line is a force (2.19)
     // which way a party item runs: ↗ chase (they owe us) or ↙ ours (they raised it). "chase @Beca" / "from @Beca" say it;
     // else a raising word (asked, comments…) or a team member beside it = ours, otherwise a chase.
     if (party) {
@@ -220,8 +226,35 @@
     var re = new RegExp('(^|\\s)(?:(?:from|per|chase)\\s+)?@(' + p.party.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')(?=[\\s,.;:]|$)', 'i');
     return v.replace(re, '$1' + (p.dir === 'ours' ? 'chase' : 'from') + ' @$2');
   }
-  var TYPE = { note: 'Note', flowon: 'Clash', action: 'Action', itp: 'ITP', delay: 'Delay', instruction: 'Instruction', crew: 'Crew', visitor: 'Visitor', weather: 'Weather' };
-  var CYCLE = ['note', 'flowon', 'action', 'itp'];
+  var TYPE = { note: 'Note', flowon: 'Clash', force: 'Force', tagphoto: 'Tag photo', action: 'Action', itp: 'ITP', delay: 'Delay', instruction: 'Instruction', crew: 'Crew', visitor: 'Visitor', weather: 'Weather' };
+  var CYCLE = ['note', 'flowon', 'action', 'itp'], CXCYCLE = ['note', 'force', 'action', 'tagphoto'];
+  function cycle() { return S.cx ? CXCYCLE : CYCLE; }
+  function clashy(t) { return t === 'flowon' || t === 'force'; }
+  // ---------- commissioning mode (2.19) ----------
+  // ⋮ › Commissioning mode, only for people in a team that has Commission (M&E, All teams, or a job with no teams). It stays
+  // on until you switch back. The phone goes green: a ring, the band and the CX chip (tap either to switch back). A clash line
+  // is a Force (to Commission's forces & bridges), @ with a number in it is a plant tag, and a photo on a tag is a Tag photo
+  // (to the tag's photos in Commission). The phone doesn't know the plans: Commission works the plan out from the tag.
+  function canCx() {
+    var p = S.proj || {}; if (p.demo) return true;
+    var me = S.me && (p.people || []).filter(function (x) { return x.handle === S.me.handle; })[0], g = me && me.group || '';
+    if (!(p.teams || []).length || !g || g === 'all') return true;
+    var t = p.teams.filter(function (x) { return x.id === g || x.name === g; })[0];
+    return !t || !t.apps || t.apps.indexOf('commission') >= 0;
+  }
+  async function loadCx() { S.cx = !!(S.proj && canCx() && await kvGet('cx:' + S.proj.project.id)); showCx(); }
+  async function setCx(on) { S.cx = !!on; await kvSet('cx:' + S.proj.project.id, S.cx); S.as = null; showCx(); closeSheet(); buzz(on ? [8, 40, 8] : 8); toast(on ? 'Commissioning. Forces go to Commission; @ a tag for its photos.' : 'Back to Build.'); render(); }
+  function showCx() {
+    document.documentElement.classList.toggle('cx', !!S.cx);
+    var c = $('cxchip'), b = $('cxband'); if (c) c.hidden = !S.cx; if (b) b.hidden = !S.cx;
+    var mt = document.querySelector('meta[name=theme-color]'); if (mt) mt.content = '#000000';
+  }
+  function cxSheet() {
+    sheet('<div class="grip"></div><h2>Commissioning mode</h2><p>' + (S.cx ? 'You’re commissioning. It stays on until you switch back.' : 'For commissioning on site: the phone goes green and stays that way until you switch back.') + '</p>' +
+      '<div class="list">' + (S.cx ? '<button type="button" data-act="cxoff"><span class="lt"><b>Back to Build</b><span>Clashes to Build, photos to the ITP line</span></span></button>'
+        : '<button type="button" data-act="cxon"><span class="lt"><b>Start commissioning</b><span>Forces to Commission’s forces & bridges, photos to the tag</span></span></button>') + '</div>' +
+      '<div class="sec">How to write</div><p><b>S1-AIT-420 forced to 5 mg/L ; remove after the DO probe is calibrated</b> is a force (or start with <b>force.</b>). <b>@S1-LIT-421</b> with a photo files the photo on that tag. Notes and actions work as always. Commission works out the plan from the tag.</p>');
+  }
 
   // ---------- days ----------
   function daysOf() {
@@ -237,8 +270,8 @@
       return { day: d, entries: es, unshipped: lines || wxo, wxOnly: wxo && !lines, changed: changed, gone: gone[d] || 0 };
     });
   }
-  function counts(es) { var c = { note: 0, flowon: 0, action: 0, itp: 0, photo: 0 }; es.forEach(function (e) { if (e.type === 'weather') return; c[e.type] = (c[e.type] || 0) + 1; c.photo += pics(e).length; }); return c; }
-  function dotsRow(c) { return '<span class="dots-row"><span><span class="dot-n">●</span>' + c.note + '</span><span><span class="dot-f">●</span>' + c.flowon + '</span><span><span class="dot-a">●</span>' + c.action + '</span>' + (c.itp ? '<span><span class="dot-i">●</span>' + c.itp + '</span>' : '') + (c.photo ? '<span class="muted">▣ ' + c.photo + '</span>' : '') + '</span>'; }
+  function counts(es) { var c = { note: 0, flowon: 0, force: 0, tagphoto: 0, action: 0, itp: 0, photo: 0 }; es.forEach(function (e) { if (e.type === 'weather') return; c[e.type] = (c[e.type] || 0) + 1; c.photo += pics(e).length; }); return c; }
+  function dotsRow(c) { return '<span class="dots-row"><span><span class="dot-n">●</span>' + c.note + '</span><span><span class="dot-f">●</span>' + c.flowon + '</span>' + (c.force ? '<span><span class="dot-x">●</span>' + c.force + '</span>' : '') + (c.tagphoto ? '<span><span class="dot-t">●</span>' + c.tagphoto + '</span>' : '') + '<span><span class="dot-a">●</span>' + c.action + '</span>' + (c.itp ? '<span><span class="dot-i">●</span>' + c.itp + '</span>' : '') + (c.photo ? '<span class="muted">▣ ' + c.photo + '</span>' : '') + '</span>'; }
   var RESHIP = '<span class="flag">✎ Changed · reship</span>';
   var FLAG = '<span class="flag"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke-width="2.6" aria-hidden="true"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg>Not shipped</span>';
   var TICK = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>';
@@ -295,13 +328,14 @@
   function itpHead(e) { return 'ITP · ' + (e.itp && e.line ? esc(e.itp) + ' ' + esc(e.line) : 'TO SORT ON THE PC'); }
   function entryHtml(e, hl) {
     var mark = function (s) { s = esc(s); if (!hl) return s; var q = hl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); return s.replace(new RegExp('(' + esc(q) + ')', 'ig'), '<mark>$1</mark>'); };
-    var where = e.itp ? (e.area ? e.area + ' · ' : '') + e.itp : e.area || e.tag || '';
+    var where = e.itp ? (e.area ? e.area + ' · ' : '') + e.itp : e.area || (e.tag && String(e.text || '').toUpperCase().indexOf(e.tag) < 0 ? e.tag : '') || '';
     var who = e.who ? whoTxt(e.who) + ' · ' : '';
     var head = e.type === 'action' ? 'ACTION · ' + (e.who ? esc(whoTxt(e.who)) : 'you') + (e.priority ? ' · ' + esc(e.priority) : '') : e.type === 'itp' ? itpHead(e) : e.type === 'delay' ? 'DELAY' + (e.lost ? ' · ' + fmtH(e.lost).toUpperCase() + ' LOST' : '') : e.type === 'instruction' ? 'INSTRUCTION' + (e.who ? ' · FROM ' + esc(whoTxt(e.who)) : '') : (TYPE[e.type] || 'Note').toUpperCase();
     var meta = [where ? '<span class="' + (e.there ? 'there' : '') + '">' + mark(where) + '</span>' : '', e.party ? '<span class="pty ' + esc(e.dir) + '">' + (e.dir === 'ours' ? '↙ from ' : '↗ chase ') + mark(e.party) + '</span>' : '', e.type !== 'action' && who ? esc(who.replace(' · ', '')) : '', e.due ? 'due ' + esc(dayLabel(e.due)) : '', e.edited ? 'edited' : '', (e.notFound || []).length ? '<span class="nf">@' + esc(e.notFound.join(' @')) + ' not found</span>' : ''].filter(Boolean).join(' · ');
     var ed = S.edit === e.id;
     return '<button type="button" class="e ' + e.type + (ed ? ' ed' : '') + (S.fresh === e.id ? ' new' : '') + '" data-e="' + esc(e.id) + '"><span class="e-h"><span class="e-k">' + (ed ? PEN : '') + head + '</span><span>' + hm(e.time) + (e.shipped ? ' ✓' : '') + '</span></span>' +
-      (e.text ? '<span class="e-t">' + mark(e.text) + '</span>' : '') + (e.type === 'flowon' ? (e.action ? '<span class="e-a">→ ' + mark(e.action) + '</span>' : '<span class="e-none">⚠ No action yet · tap to add</span>') : '') +
+      (e.text ? '<span class="e-t">' + mark(e.text) + '</span>' : '') + (e.type === 'flowon' ? (e.action ? '<span class="e-a">→ ' + mark(e.action) + '</span>' : '<span class="e-none">⚠ No action yet · tap to add</span>') : e.type === 'force' && e.action ? '<span class="e-a">→ ' + mark(e.action) + '</span>' : '') +
+      (e.type === 'force' ? '<span class="e-m">→ Commission’s forces &amp; bridges</span>' : e.type === 'tagphoto' ? '<span class="e-m">→ the tag’s photos in Commission</span>' : '') +
       (meta ? '<span class="e-m">' + meta + '</span>' : '') + picsHtml(pics(e), e.id) + '</button>';
   }
   var PEN = '<svg class="pen" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg>';
@@ -312,7 +346,7 @@
     var e = S.entries.filter(function (x) { return x.id === S.edit; })[0]; if (!e) return '';
     var head = e.type === 'action' ? 'ACTION' + (e.who ? ' · ' + esc(whoTxt(e.who)) : '') : e.type === 'itp' ? itpHead(e) : TYPE[e.type].toUpperCase();
     return '<div class="pin ' + e.type + '"><div class="pin-b"><span class="e-k">' + PEN + 'EDITING ' + head + ' · ' + hm(e.time) + '</span>' +
-      '<span class="pin-t">' + esc(e.text || '') + (e.type === 'flowon' && e.action ? ' → ' + esc(e.action) : '') + '</span></div>' +
+      '<span class="pin-t">' + esc(e.text || '') + (clashy(e.type) && e.action ? ' → ' + esc(e.action) : '') + '</span></div>' +
       '<button type="button" class="pin-x del" data-act="delete" aria-label="Delete this line">' + BIN + '</button>' +
       '<button type="button" class="pin-x" data-act="cancel" aria-label="Stop editing">×</button></div>';
   }
@@ -321,7 +355,7 @@
     var c = counts(es), t = today(), dd = dayDate(d);
     var chip = function (cls, n, w) { return n ? '<span><i class="' + cls + '"></i>' + n + ' ' + w + '</span>' : ''; };
     return '<div class="dayhead" id="dayhead"><div class="k">' + (d === t ? 'Today' : d === addDays(t, -1) ? 'Yesterday' : dd.getDate() + ' ' + MO[dd.getMonth()] + ' ' + dd.getFullYear()) + '</div><h1>' + ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dd.getDay()] + '</h1>' +
-      (es.length ? '<div class="chips">' + chip('dot-n', c.note, 'note' + (c.note === 1 ? '' : 's')) + chip('dot-f', c.flowon, 'clash' + (c.flowon === 1 ? '' : 'es')) + chip('dot-a', c.action, 'action' + (c.action === 1 ? '' : 's')) + chip('dot-i', c.itp, 'ITP') + (c.photo ? '<span>▣ ' + c.photo + ' photo' + (c.photo === 1 ? '' : 's') + '</span>' : '') + '</div>' : '') + '<div id="wxslot"></div></div>';
+      (es.length ? '<div class="chips">' + chip('dot-n', c.note, 'note' + (c.note === 1 ? '' : 's')) + chip('dot-f', c.flowon, 'clash' + (c.flowon === 1 ? '' : 'es')) + chip('dot-x', c.force, 'force' + (c.force === 1 ? '' : 's')) + chip('dot-t', c.tagphoto, 'tag photo' + (c.tagphoto === 1 ? '' : 's')) + chip('dot-a', c.action, 'action' + (c.action === 1 ? '' : 's')) + chip('dot-i', c.itp, 'ITP') + (c.photo ? '<span>▣ ' + c.photo + ' photo' + (c.photo === 1 ? '' : 's') + '</span>' : '') + '</div>' : '') + '<div id="wxslot"></div></div>';
   }
   function placeOf(e) { return e.location || ''; }
   function withPlaces(list, q) {
@@ -374,8 +408,10 @@
       sg.innerHTML = li.lines.filter(function (l) { return !lk || l.no.indexOf(lk) === 0; }).slice(0, 14).map(function (l) { return '<button type="button" data-line="' + esc(l.no) + '">' + esc(l.no) + '<small>' + esc(l.text) + '</small></button>'; }).join('');
     } else if (at && at[1].length <= 24 && !/\s{2}/.test(at[1])) {
       var k = key(at[1]);
-      var list = (S.proj.people || []).map(function (x) { return { put: x.handle, label: x.name, sub: '@' + x.handle }; }).concat([{ put: 'all', label: 'Everyone', sub: '@all' }]).concat((S.proj.teams || []).map(function (t) { var tw = String(t.name).toLowerCase().replace(/\s+/g, ''); return { put: 'all-' + tw, label: 'Everyone in ' + t.name, sub: '@all-' + tw }; })).concat(partiesAll().map(function (x) { return { put: x.name.replace(/\s+/g, ''), label: x.name, sub: (x.role || 'party') + (x.contact ? ' · ' + x.contact : '') }; })).concat(places().map(function (x) { return { put: x.name, label: x.name, sub: x.kind === 'itp' ? x.area : x.kind }; }))
-        .filter(function (x) { return !k || key(x.put).indexOf(k) === 0 || key(x.label).indexOf(k) === 0; }).slice(0, 12);
+      var list = (S.proj.people || []).map(function (x) { return { put: x.handle, label: x.name, sub: '@' + x.handle }; }).concat([{ put: 'all', label: 'Everyone', sub: '@all' }]).concat((S.proj.teams || []).map(function (t) { var tw = String(t.name).toLowerCase().replace(/\s+/g, ''); return { put: 'all-' + tw, label: 'Everyone in ' + t.name, sub: '@all-' + tw }; })).concat(partiesAll().map(function (x) { return { put: x.name.replace(/\s+/g, ''), label: x.name, sub: (x.role || 'party') + (x.contact ? ' · ' + x.contact : '') }; })).concat(places().map(function (x) { return { put: x.name, label: x.name, sub: x.kind === 'itp' ? x.area : x.kind === 'tag' ? 'plant tag' : x.kind, tag: x.kind === 'tag' }; }))
+        .filter(function (x) { return !k || key(x.put).indexOf(k) === 0 || key(x.label).indexOf(k) === 0; });
+      if (S.cx) list = list.filter(function (x) { return x.tag; }).concat(list.filter(function (x) { return !x.tag; }));   // tags first when commissioning (2.19)
+      list = list.slice(0, 12);
       if (list.length === 1 && k && (key(list[0].put) === k || key(list[0].label) === k)) list = [];   // already typed in full
       sg.innerHTML = list.map(function (x) { return '<button type="button" data-put="' + esc(x.put) + '">' + esc(x.label) + '<small>' + esc(x.sub) + '</small></button>'; }).join('');
     } else sg.innerHTML = v.trim() || S.edit ? '' : smart();
@@ -389,6 +425,9 @@
       (where ? '<span class="chip warn">@ ' + esc(where) + '</span>' : '') + (type === 'action' ? '<span class="chip">' + (p.who ? esc(whoTxt(p.who)) : 'you') + '</span>' : p.who ? '<span class="chip">@' + esc(p.who) + '</span>' : '') +
       (type === 'delay' ? '<span class="chip warn">' + (p.lost ? fmtH(p.lost) + ' lost' : 'add the time lost: 2h, 30 min') + '</span>' : '') + (p.priority ? '<span class="chip">' + p.priority + '</span>' : '') + (p.due ? '<span class="chip">due ' + esc(dayLabel(p.due)) + '</span>' : '') +
       (type === 'flowon' ? (p.action ? '<span class="chip">→ ' + esc(p.action) + '</span>' : '<span class="chip warn">no action yet: add ; and what next</span>') : '') +
+      (type === 'force' ? (p.action ? '<span class="chip">→ ' + esc(p.action) + '</span>' : '') + (p.tag ? '' : '<span class="chip warn">no tag: @ the tag, e.g. @S1-AIT-420</span>') + '<span class="chip cx">to forces &amp; bridges</span>' : '') +
+      (type === 'tagphoto' ? (p.tag ? '' : '<span class="chip warn">@ the tag</span>') + (S.photos.length ? '' : '<span class="chip warn">add a photo</span>') + '<span class="chip cx">to the tag in Commission</span>' : '') +
+      (S.cx && type === 'note' && p.tag && S.photos.length ? '<span class="chip cx">photo to the tag</span>' : '') +
       (p.notFound.length ? '<span class="chip nf">@' + esc(p.notFound.join(' @')) + ' not found</span>' : '') +
       (p.party ? '<button type="button" class="chip pty ' + p.dir + '" data-act="flip">' + (p.dir === 'ours' ? '↙ from ' : '↗ chase ') + esc(p.party) + (p.partyNew ? ' · new' : p.partyRole ? ' · ' + esc(p.partyRole) : '') + ' ⇄</button>' : '') +
       (type === 'itp' ? (p.itp && p.line ? '<span class="chip">' + esc(p.line) + ' ' + esc((lineOf(p.itp, p.line) || {}).text || '') + '</span>'
@@ -407,11 +446,13 @@
     if (S.lastLine) out.push('<button type="button" data-ins="@' + esc(S.lastLine.itp + ' ' + S.lastLine.line) + ' ">@' + esc(S.lastLine.itp + ' ' + S.lastLine.line) + '</button>');
     var tally = {}; S.entries.forEach(function (e) { String(e.who || '').split(/\s+/).filter(Boolean).forEach(function (h) { if (h !== 'all') tally[h] = (tally[h] || 0) + 1; }); });
     Object.keys(tally).sort(function (a, b) { return tally[b] - tally[a]; }).slice(0, 2).forEach(function (h) { if (!seen[h]) { seen[h] = 1; out.push('<button type="button" data-ins=" @' + esc(h) + ' ">@' + esc(h) + '</button>'); } });
-    ['clash.', 'action.', 'ITP.'].forEach(function (w) { out.push('<button type="button" data-ins="' + w + ' ">' + w + '</button>'); });
+    (S.cx ? ['force.', 'action.'] : ['clash.', 'action.', 'ITP.']).forEach(function (w) { out.push('<button type="button" data-ins="' + w + ' ">' + w + '</button>'); });
     return out.join('');
   }
   function matches(e, q) {
     if (q === 'clashes' || q === 'flowons' || q === 'clash') return e.type === 'flowon';
+    if (q === 'forces' || q === 'force') return e.type === 'force';
+    if (q === 'tagphoto' || q === 'tag photos') return e.type === 'tagphoto';
     if (q === 'actions' || q === 'action') return e.type === 'action';
     if (q === 'notes' || q === 'note') return e.type === 'note';
     if (q === 'itp' || q === 'itps') return e.type === 'itp';
@@ -429,6 +470,7 @@
     var p = parse(raw, S.day);
     if (p.move) { S.loc = p.move; await kvSet('loc', S.loc); S.draft = ''; b.value = ''; toast('At ' + p.move.name); renderDay(); return; }
     var type = S.as || p.type, now = new Date().toISOString();
+    if (S.cx && type === 'note' && p.tag && S.photos.length) type = 'tagphoto';   // a photo on a plant tag (2.19)
     if (p.party && p.partyNew) await learnParty(p.party);
     var where = p.there ? {} : S.loc ? { area: S.loc.area || '', itp: S.loc.itp || '', tag: S.loc.tag || '' } : {};
     if (S.edit) {
@@ -441,11 +483,13 @@
     if (type === 'itp' && p.itp && p.line) { S.lastLine = { itp: p.itp, line: p.line }; kvSet('lastLine:' + S.proj.project.id, S.lastLine); }
     var en = { id: uid(), proj: S.proj.project.id, day: S.day, time: now, raw: raw, type: type, line: p.line, text: p.text || '', action: p.action, who: p.who, party: p.party || '', dir: p.dir || '', area: p.there ? p.area : where.area || '', itp: p.there ? p.itp : where.itp || '', tag: p.there ? p.tag : where.tag || '',
       location: S.loc ? S.loc.name : '', priority: p.priority, due: p.due, photos: S.photos.slice(), edited: false, shipped: false, notFound: p.notFound, there: !!p.there };
+    if (S.cx) en.cx = true;
     if (p.wx) en.wx = p.wx; if (p.crew) en.crew = p.crew; if (p.lost) en.lost = p.lost;
     S.entries.push(en); await putEntry(en); if (type === 'action') syncSoon(6500);   // straight to BTC (2.12)
     S.draft = ''; S.photos = []; S.as = null; S.fresh = en.id; buzz(8); renderDay(); S.fresh = null;
     var np = pics(en).length;
     if (type === 'weather') { wxRefresh(); toast('Weather logged: ' + wxWords(en.wx) + '. The rest of the day stays on the forecast.', false, { label: 'Undo', fn: async function () { S.entries = S.entries.filter(function (x) { return x.id !== en.id; }); await delEntry(en.id); if (S.view === 'day') renderDay(); } }); return; }
+    if (type === 'force' || type === 'tagphoto') { toast((type === 'force' ? 'Force logged' + (en.tag ? ' on ' + en.tag : '') + ': Commission adds it to forces & bridges' : 'Photo' + (np === 1 ? '' : 's') + ' for ' + en.tag + ': Commission files ' + (np === 1 ? 'it' : 'them') + ' on the tag') + '.', false, { label: 'Undo', fn: async function () { S.entries = S.entries.filter(function (x) { return x.id !== en.id; }); await delEntry(en.id); S.draft = raw; S.photos = pics(en).slice(); if (S.view === 'day') renderDay(); } }); return; }
     toast(type === 'itp' ? (en.itp && en.line ? 'Logged on ' + en.itp + ' ' + en.line : 'Logged, to sort on the PC') + (np ? ' · ' + np + ' photo' + (np === 1 ? '' : 's') : '') : 'Logged' + (np ? ' · ' + np + ' photo' + (np === 1 ? '' : 's') : ''), false,
       { label: 'Undo', fn: async function () { S.entries = S.entries.filter(function (x) { return x.id !== en.id; }); await delEntry(en.id); S.draft = raw; S.photos = pics(en).slice(); if (S.view === 'day') renderDay(); } });
   }
@@ -474,11 +518,11 @@
     var byDay = {}; es.forEach(function (e) { (byDay[e.day] = byDay[e.day] || []).push(e); });
     var days = Object.keys(byDay).sort().reverse(), un = {}; daysOf().forEach(function (d) { un[d.day] = d.unshipped; });
     main.innerHTML = '<div class="findbar"><button type="button" class="icon" data-act="back" aria-label="Back to days"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button><input type="search" id="find-all" placeholder="Search everything you’ve logged" value="' + esc(S.findAll) + '" aria-label="Search every day"></div>' +
-      '<div class="filters">' + [['all', 'All'], ['photo', 'Photos'], ['note', 'Notes'], ['flowon', 'Clashes'], ['action', 'Actions'], ['itp', 'ITP']].map(function (x) { return '<button type="button" data-filter="' + x[0] + '"' + (f === x[0] ? ' class="on"' : '') + '>' + x[1] + '</button>'; }).join('') + '</div>' +
+      '<div class="filters">' + [['all', 'All'], ['photo', 'Photos'], ['note', 'Notes'], ['flowon', 'Clashes'], ['action', 'Actions'], ['itp', 'ITP']].concat(S.cx || S.entries.some(function (e) { return e.cx; }) ? [['force', 'Forces']] : []).map(function (x) { return '<button type="button" data-filter="' + x[0] + '"' + (f === x[0] ? ' class="on"' : '') + '>' + x[1] + '</button>'; }).join('') + '</div>' +
       '<div class="scroll"><div class="pad" style="gap:0">' + (q || f !== 'all' ? '<div class="kick" style="padding-bottom:6px">' + es.length + ' line' + (es.length === 1 ? '' : 's') + ' on ' + days.length + ' day' + (days.length === 1 ? '' : 's') + '</div>' : '') +
       days.map(function (d) {
         return '<div class="res-day">' + (d === today() ? 'Today · ' : '') + esc(dayLabel(d)) + (un[d] && d !== today() ? ' <span class="tag" style="color:var(--flow-ink)">Not shipped</span>' : '') + '</div>' + byDay[d].map(function (e) {
-          var dot = e.type === 'flowon' ? 'dot-f' : e.type === 'action' ? 'dot-a' : e.type === 'itp' ? 'dot-i' : 'dot-n', hlq = q && q.charAt(0) !== '@' ? q : '';
+          var dot = e.type === 'flowon' ? 'dot-f' : e.type === 'force' ? 'dot-x' : e.type === 'tagphoto' ? 'dot-t' : e.type === 'action' ? 'dot-a' : e.type === 'itp' ? 'dot-i' : 'dot-n', hlq = q && q.charAt(0) !== '@' ? q : '';
           var mk = function (s) { s = esc(s); if (!hlq) return s; return s.replace(new RegExp('(' + esc(hlq.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) + ')', 'ig'), '<mark>$1</mark>'); };
           var where = e.itp ? (e.area ? e.area + ' · ' : '') + e.itp : e.area || e.tag || '';
           return '<button type="button" class="res" data-jump="' + esc(e.id) + '"><span class="tm">' + hm(e.time) + '</span><span style="display:flex;flex-direction:column;gap:3px"><span style="font-size:15px"><span class="' + dot + '">●</span> ' + mk(e.text) + (e.action ? ' <b>→ ' + mk(e.action) + '</b>' : '') + (e.who ? ' @' + esc(e.who) : '') + '</span>' + (where || pics(e).length ? '<span class="e-m">' + esc(where) + (pics(e).length ? (where ? ' · ' : '') + '▣ ' + pics(e).length + ' photo' + (pics(e).length === 1 ? '' : 's') : '') + '</span>' : '') + '</span></button>';
@@ -755,7 +799,7 @@
     var es = [], pickDays = {}; pick.forEach(function (d) { es = es.concat(d.entries); pickDays[d.day] = true; });
     var gone = (S.gone || []).filter(function (g) { return pickDays[g.day]; });
     var body = { format: FORMAT, v: 1, project: { id: S.proj.project.id, code: S.proj.project.code, name: S.proj.project.name }, shippedBy: { name: S.me ? S.me.name : '', handle: S.me ? S.me.handle : '' }, shippedAt: new Date().toISOString(), app: 'BTC Walk ' + VERSION,
-      walks: [], entries: es.map(function (e) { return { id: e.id, day: e.day, time: e.time, type: e.type, raw: e.raw, text: e.text, action: e.action, who: e.who, party: e.party || '', dir: e.dir || '', area: e.area, itp: e.itp, line: e.line || '', tag: e.tag, location: e.location, priority: e.priority, due: e.due, photos: pics(e), photo: pics(e)[0] || '', edited: e.edited, wx: e.wx, crew: e.crew, lost: e.lost, was: e.was, wasType: e.wasType, amendedAt: e.amendedAt }; }), removed: gone.map(function (g) { return { id: g.id, day: g.day }; }), closures: [] };
+      walks: [], entries: es.map(function (e) { return { id: e.id, day: e.day, time: e.time, type: e.type, raw: e.raw, text: e.text, action: e.action, who: e.who, party: e.party || '', dir: e.dir || '', area: e.area, itp: e.itp, line: e.line || '', tag: e.tag, location: e.location, priority: e.priority, due: e.due, photos: pics(e), photo: pics(e)[0] || '', edited: e.edited, wx: e.wx, crew: e.crew, lost: e.lost, was: e.was, wasType: e.wasType, amendedAt: e.amendedAt, cx: e.cx || undefined }; }), removed: gone.map(function (g) { return { id: g.id, day: g.day }; }), closures: [] };
     var wx = {}; for (var wi = 0; wi < pick.length; wi++) { var fc = await wxForecast(pick[wi].day), st0 = await wxStart(pick[wi].day); if (fc || st0) wx[pick[wi].day] = Object.assign({}, fc || { day: pick[wi].day, source: 'MET Norway', hours: {} }, st0 ? { start: st0 } : {}); }
     if (Object.keys(wx).length) body.weather = wx;
     if (CL) body.close = { date: CL.date, at: CL.at, sig: CL.sig, title: CL.title, reviewer: CL.reviewer };   // Close the day (2.9): signed here
@@ -868,6 +912,7 @@
     await kvSet('project', p); S.proj = p;
     S.entries = await allEntries(p.project.id); S.newParties = (await kvGet('parties:' + p.project.id)) || []; S.gone = (await kvGet('gone:' + p.project.id)) || [];
     var me = await kvGet('me:' + p.project.id); S.me = me || null; S.loc = null; await kvSet('loc', null);
+    await loadCx();
     closeSheet(); S.view = 'days'; render();
     toast('Loaded ' + p.project.name + (p.made ? ' (from ' + dayLabel(p.made.slice(0, 10)) + ')' : '') + '.');
     if (!S.me) pickMe(); else packsLoad(true);
@@ -908,6 +953,7 @@
       '<button type="button" data-act="sigset"><span class="lt"><b>Your signature: ' + (S.sig ? 'set' : 'not set') + '</b><span>Draw it, or a photo of it on paper</span></span></button>' +
       '<button type="button" data-act="me"><span class="lt"><b>You: ' + esc(S.me ? S.me.name : 'not picked') + '</b><span>Whose diary your days go into</span></span></button>' +
       (p.demo ? '' : '<button type="button" data-act="pkset"><span class="lt"><b>Your actions: ' + (S.packCfg && S.packCfg.key ? 'on' : 'off') + '</b><span>Your open actions and chases from BTC</span></span></button>') +
+      (canCx() ? '<button type="button" data-act="cxset"><span class="lt"><b>Commissioning mode: ' + (S.cx ? 'on' : 'off') + '</b><span>' + (S.cx ? 'Forces and tag photos go to Commission' : 'For commissioning: forces to Commission, photos to the tag') + '</span></span></button>' : '') +
       '<button type="button" data-act="wxset"><span class="lt"><b>Weather: ' + (wxOn() ? 'on' : 'off') + '</b><span>' + (wxOn() ? 'Forecast from MET Norway' + (siteLoc() ? '' : ' · set the site location') : 'Fill in each day’s weather from MET Norway') + '</span></span></button>' +
       (p.demo ? '' : '<button type="button" data-act="demo"><span class="lt"><b>Try the demo</b><span>A made-up job to practise on. Your job’s lines stay on the phone.</span></span></button>') + '</div>' +
       '<div class="sec">On this phone</div>' + (function () { var o = oldShipped(); return o.length ? '<div class="list"><button type="button" data-act="clearold"><span class="lt"><b>Free up space</b><span>Clear ' + o.length + ' shipped line' + (o.length === 1 ? '' : 's') + ' older than a month (' + (JSON.stringify(o).length / 1048576).toFixed(1) + ' MB). They’re safe in BTC.</span></span></button></div>' : ''; })() + '<p>' + n + ' line' + (n === 1 ? '' : 's') + ' for this job. Lines stay on this phone until you close the day; actions go to BTC straight away. Keep BTC Walk on your Home Screen (Safari › Share › Add to Home Screen) so the phone keeps them.</p>' +
@@ -929,6 +975,7 @@
     await kvSet('project', p); S.proj = p; S.entries = await allEntries(p.project.id); S.newParties = (await kvGet('parties:' + p.project.id)) || []; S.gone = (await kvGet('gone:' + p.project.id)) || [];
     S.me = (await kvGet('me:' + p.project.id)) || { name: 'Sam Rivers', handle: 'SR' }; await kvSet('me:' + p.project.id, S.me);
     if (!S.entries.length) await seedDemo();
+    await loadCx();
     closeSheet(); S.view = 'days'; render();
   }
   async function seedDemo() {   // two days so the list and search have something in them
@@ -1392,6 +1439,7 @@
     if (t && t.dataset.tph != null) { showPhotos(S.photos.map(function (src) { return { src: src, e: {} }; }), +t.dataset.tph, true); return; }
     if (!t) { if (ev.target.id === 'sheet') closeSheet(); return; }
     if (t.id === 'more' || t.id === 'proj') { settings(); return; }
+    if (t.id === 'cxchip' || t.id === 'cxband') { cxSheet(); return; }
     if (t.id === 'find') { S.view = S.view === 'findall' ? 'days' : 'findall'; render(); return; }
     if (t.dataset.day) { openDay(t.dataset.day); return; }
     if (t.dataset.put) { var b = $('box'), v = b.value, pos = b.selectionStart || v.length, i = v.lastIndexOf('@', pos - 1); b.value = v.slice(0, i + 1) + t.dataset.put + ' ' + v.slice(pos); b.focus(); var np = i + 2 + t.dataset.put.length; b.setSelectionRange(np, np); S.draft = b.value; reads(); return; }
@@ -1403,7 +1451,7 @@
       S.edit = e.id; S.photos = pics(e).slice(); S.as = e.type; renderDay(); var bx = $('box'); bx.focus(); return;
     }
     if (t.dataset.jump) { var j = S.entries.filter(function (x) { return x.id === t.dataset.jump; })[0]; if (!j) return; openDay(j.day); var el2 = document.querySelector('[data-e="' + j.id + '"]'); if (el2) { el2.scrollIntoView({ block: 'center' }); el2.classList.add('sel'); setTimeout(function () { el2.classList.remove('sel'); }, 1400); } return; }
-    if (t.dataset.me) { var pp = (S.proj.people || []).filter(function (x) { return x.handle === t.dataset.me; })[0]; S.me = { name: pp.name, handle: pp.handle }; await kvSet('me:' + S.proj.project.id, S.me); closeSheet(); toast('You’re ' + pp.name + '.'); render(); S.pack = null; packsLoad(true); return; }
+    if (t.dataset.me) { var pp = (S.proj.people || []).filter(function (x) { return x.handle === t.dataset.me; })[0]; S.me = { name: pp.name, handle: pp.handle }; await kvSet('me:' + S.proj.project.id, S.me); await loadCx(); closeSheet(); toast('You’re ' + pp.name + '.'); render(); S.pack = null; packsLoad(true); return; }
     if (t.dataset.job != null) { var jb = (S.jobsFound || [])[+t.dataset.job]; S.jobsFound = null; if (jb) await takeProject(jb); return; }
     if (t.dataset.filter) { S.filter = t.dataset.filter; renderFindAll(); return; }
     if (t.dataset.fix) { closeSheet(); var fx = S.entries.filter(function (x) { return x.id === t.dataset.fix; })[0]; openDay(fx.day); S.edit = fx.id; S.as = 'flowon'; renderDay(); var bb = $('box'); bb.value = (fx.raw || fx.text) + ' ; '; bb.focus(); reads(); return; }
@@ -1424,6 +1472,9 @@
     else if (act === 'clearold') clearOld();
     else if (act === 'wxdetail') wxDetail();
     else if (act === 'wxset') wxSettings();
+    else if (act === 'cxset') cxSheet();
+    else if (act === 'cxon') setCx(true);
+    else if (act === 'cxoff') setCx(false);
     else if (act === 'pkset') packsSettings();
     else if (act === 'packall') { S.packAll = !S.packAll; renderDays(); }
     else if (act === 'pksave') {
@@ -1464,7 +1515,7 @@
     }
     else if (act === 'findday') { S.findOpen = !S.findOpen; if (!S.findOpen) S.find = ''; renderDay(); var fd = $('find-day'); if (fd) fd.focus(); }
     else if (act === 'flip') { var bf = $('box'); if (bf) { bf.value = flipText(bf.value); S.draft = bf.value; bf.focus(); reads(); } }
-    else if (act === 'as') { var cur = $('box') ? (S.as || parse($('box').value, S.day).type) : 'note'; S.as = CYCLE[(CYCLE.indexOf(cur) + 1) % CYCLE.length]; reads(); }
+    else if (act === 'as') { var cur = $('box') ? (S.as || parse($('box').value, S.day).type) : 'note', cy = cycle(); S.as = cy[(cy.indexOf(cur) + 1) % cy.length]; reads(); }
     else if (act === 'lastline') { var bx2 = $('box'); bx2.value = bx2.value.replace(/\s*$/, '') + ' @' + S.lastLine.itp + ' ' + S.lastLine.line; S.draft = bx2.value; bx2.focus(); reads(); }
     else if (act === 'unloc') { S.loc = null; await kvSet('loc', null); renderDay(); }
     else if (act === 'cancel') { S.edit = null; S.as = null; S.photos = []; renderDay(); }
@@ -1538,6 +1589,7 @@
     S.me = (await kvGet('me:' + p.project.id)) || null; S.loc = (await kvGet('loc')) || null; S.lastLine = (await kvGet('lastLine:' + p.project.id)) || null; S.gone = (await kvGet('gone:' + p.project.id)) || [];
     S.wx = (await kvGet('wx')) || {};
     S.sig = (await kvGet('sig')) || ''; S.closed = (await kvGet('closed:' + p.project.id)) || {};
+    await loadCx();
     H.ready = true; history.replaceState({ walk: 'root' }, ''); render();
     if (!S.me && !p.demo) pickMe();
     checkUpdate(); wxFetch(); wxRecalc(); packsLoad(true); setTimeout(shipLater, 3000);

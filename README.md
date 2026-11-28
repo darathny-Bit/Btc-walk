@@ -70,6 +70,15 @@ iOS 27 lays a hazy glass over the top of home-screen web apps. On an iPhone or i
 ## The job comes by itself (2.14)
 With the key and team password in (⋮ › Your actions; on the demo it's ⋮ › **Connect to BTC**, first in the list, 2.14.1), the phone looks in btc-drop's `projects/` folder, opens each `.btcpack` with the team password and loads the job it finds over the demo (several: it asks which), then asks who you are. Build sends it (`projects/<job hash>.btcpack`, the project file locked like a pack) when someone makes it (⋮ › Phone project file…) and by itself when anything in it changed; the phone checks for a newer one every 10 minutes at most when it opens, and takes it without touching your days. **Load project…** still works for a file, and now takes any file (an iPhone greys out `.btcproject` otherwise); the app checks it.
 
+## Commissioning mode (2.19)
+
+⋮ › **Commissioning mode** (shown to people in a team whose apps include Commission, everyone in a job without teams, and in the demo). The phone goes green: a ring round the screen, the **COMMISSIONING** band and the **CX** chip; tap either to switch back. It stays on until you do, even after the app is closed.
+
+- A clash line is a **Force** (`S1-AIT-420 forced to 5 mg/L ; remove after the DO probe is calibrated`, or start with `force.`): BTC puts it on Commission's forces & bridges.
+- `@` with a number in it is a **plant tag** (`@S1-LIT-421`); a tag written in the words of a force counts too. A photo on a tag is a **Tag photo**: BTC saves it into that tag's photos.
+- **LOG AS** cycles Note › Force › Action › Tag photo. Notes and actions work as always. The phone doesn't know the plans: BTC works the plan out from the tag.
+- The project file's `tags` (if it has them) are offered first after `@` while commissioning. Lines carry `cx: true`; types `force` and `tagphoto`.
+
 ## Tap a card to open it (2.18)
 On **Your actions**, tap a card and it grows in place: the whole title, who it's from, who's chasing or on it, the ref, due and given dates, then **Mark done** and **Pass on**. One card is open at a time (opening another closes the first). Swipe is off on the open card and stays on the closed ones. The open card is a layer like a sheet: Back, the left-edge swipe on iPhone, or a tap on its header closes it. (Context notes and a checklist need BTC to send them in the pack; not there yet.)
 

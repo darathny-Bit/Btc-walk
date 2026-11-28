@@ -15,23 +15,25 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@500;600&display=swap">
-<link rel="stylesheet" href="styles.css?v=23">
+<link rel="stylesheet" href="styles.css?v=24">
 </head>
 <body>
 <header class="bar">
   <span class="logo">BTC</span>
   <span class="app">Walk</span>
   <button type="button" class="proj" id="proj" aria-label="Project">…</button>
+  <button type="button" class="cxchip" id="cxchip" aria-label="Commissioning: tap to switch back" hidden>CX</button>
   <span class="fill"></span>
   <button type="button" class="icon" id="find" aria-label="Search"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg></button>
   <button type="button" class="icon dots" id="more" aria-label="Settings">⋮</button>
 </header>
+<button type="button" class="cxband" id="cxband" hidden><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round" aria-hidden="true"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg>COMMISSIONING</button>
 <main id="main"></main>
 <div id="sheet" class="sheet-wrap" hidden></div>
 <div id="toast" class="toast" role="status" hidden></div>
 <input type="file" id="photo-in" accept="image/*" capture="environment" hidden>
 <input type="file" id="pics-in" accept="image/*" multiple hidden>
 <input type="file" id="proj-in" hidden>
-<script src="app.js?v=29"></script>
+<script src="app.js?v=30"></script>
 </body>
 </html>
