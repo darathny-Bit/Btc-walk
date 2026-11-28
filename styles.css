@@ -442,3 +442,16 @@ main.in-back { animation: in-back .24s var(--ease); }
 /* iPhone (2.16.1): iOS 27 lays a hazy glass over the top of home-screen web apps, so the bar is taller there:
    empty black at the top under the haze, its buttons shifted down below it */
 html.ios .bar { padding-top: calc(max(var(--safe-t), 20px) + 25px); padding-bottom: 10px; }   /* the same place as 2.16.4 */
+
+/* the open action card (2.18): grows in place, swipe is off while it's open */
+.pa-d { display: grid; grid-template-rows: 0fr; visibility: hidden; transition: grid-template-rows .26s ease, visibility 0s .26s; }
+.pa-d > div { overflow: hidden; min-height: 0; }
+.pa-sw.open .pa-d { grid-template-rows: 1fr; visibility: visible; transition-delay: 0s; }
+.pa-di { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; padding-top: 12px; border-top: 1px solid var(--line); }
+.pa-r { display: flex; justify-content: space-between; gap: 14px; font-size: 13.5px; }
+.pa-r span { color: var(--muted); flex: none; } .pa-r b { font-weight: 600; text-align: right; min-width: 0; overflow-wrap: anywhere; }
+.pa-btns { display: flex; gap: 8px; margin-top: 4px; } .pa-btns .btn { flex: 1; min-height: 50px; }
+.pa-sw.open .pa { box-shadow: 0 10px 30px rgba(0,0,0,.5); touch-action: auto; }
+.pa-sw.open .pa-m > span:first-child { white-space: normal; }
+.pa-sw:not(.open) .pa:active { transform: scale(.985); }
+@media (prefers-reduced-motion: reduce) { .pa-d { transition: none; } }

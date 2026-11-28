@@ -70,6 +70,9 @@ iOS 27 lays a hazy glass over the top of home-screen web apps. On an iPhone or i
 ## The job comes by itself (2.14)
 With the key and team password in (⋮ › Your actions; on the demo it's ⋮ › **Connect to BTC**, first in the list, 2.14.1), the phone looks in btc-drop's `projects/` folder, opens each `.btcpack` with the team password and loads the job it finds over the demo (several: it asks which), then asks who you are. Build sends it (`projects/<job hash>.btcpack`, the project file locked like a pack) when someone makes it (⋮ › Phone project file…) and by itself when anything in it changed; the phone checks for a newer one every 10 minutes at most when it opens, and takes it without touching your days. **Load project…** still works for a file, and now takes any file (an iPhone greys out `.btcproject` otherwise); the app checks it.
 
+## Tap a card to open it (2.18)
+On **Your actions**, tap a card and it grows in place: the whole title, who it's from, who's chasing or on it, the ref, due and given dates, then **Mark done** and **Pass on**. One card is open at a time (opening another closes the first). Swipe is off on the open card and stays on the closed ones. The open card is a layer like a sheet: Back, the left-edge swipe on iPhone, or a tap on its header closes it. (Context notes and a checklist need BTC to send them in the pack; not there yet.)
+
 ## Swipe your actions (2.11)
 On **Your actions**, swipe a row right for **done** (green) or left to **pass it on** (amber; pick a person from the team). Past a third of the row (or a quick flick) it goes; short of that it springs back. **Undo** shows for 6 seconds (at the top when a sheet is open). No tick circle from 2.12: swipe only.
 

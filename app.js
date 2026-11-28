@@ -5,7 +5,7 @@
    BTC), or by hand from the project file Build makes (⋮ › Load project). Nothing goes anywhere else. */
 'use strict';
 (function () {
-  var VERSION = '2.17';
+  var VERSION = '2.18';
   // iPhone (2.16.1): iOS 27 lays a frozen glass blur over the top of home-screen web apps, so on an iPhone or iPad the top
   // bar is taller, its buttons shifted down below the haze. Undo with the 'ios' class.
   if (/iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) document.documentElement.classList.add('ios');
@@ -624,7 +624,7 @@
     var a = ((S.pack && S.pack.actions) || []).filter(function (x) { return x.id === pid; })[0]; if (!a) return;
     var who = to ? (S.proj.people || []).filter(function (p) { return p.handle === to; })[0] : null;
     S.packDone = (S.packDone || []).concat([Object.assign({ id: pid, file: a.file || '', at: new Date().toISOString() }, to ? { to: to } : {})]);
-    await kvSet('packDone:' + S.proj.project.id, S.packDone); buzz(to ? [8, 40, 8] : 10); renderDays(); syncSoon(6500);
+    await kvSet('packDone:' + S.proj.project.id, S.packDone); buzz(to ? [8, 40, 8] : 10); S.openAct = null; renderDays(); sync(); syncSoon(6500);
     toast(to ? 'Passed on to ' + (who ? who.name.split(' ')[0] : '@' + to) : 'Done', false, { label: 'Undo', ms: 6000, fn: async function () { S.packDone = S.packDone.filter(function (d) { return d.id !== pid || d.sent; }); await kvSet('packDone:' + S.proj.project.id, S.packDone); renderDays(); } });
   }
   function passSheet(pid) {
@@ -634,11 +634,18 @@
     sheet('<div class="grip"></div><h2>Pass on</h2><p>' + esc(a.title) + '</p><div class="list">' + ps.map(function (p) { return '<button type="button" data-passto="' + esc(p.handle) + '"><span class="lt"><b>' + esc(p.name) + '</b><span>' + esc(p.role || '@' + p.handle) + '</span></span></button>'; }).join('') + '</div>' +
       '<button type="button" class="btn" data-act="closesheet" style="width:100%;margin-top:10px">Cancel</button>');
   }
+  var swipedAt = 0;
+  // Open card (2.18): one at a time. Tap it to open or close; Back, the left-edge swipe or a header tap closes it (it is a layer like the sheet).
+  function setOpenAct(id) {
+    S.openAct = id || null;
+    document.querySelectorAll('.pa-sw').forEach(function (el) { el.classList.toggle('open', !!id && el.dataset.pid === id); });
+    if (id) { var el = document.querySelector('.pa-sw.open'); if (el) setTimeout(function () { el.scrollIntoView({ block: 'nearest', behavior: MOTION ? 'smooth' : 'auto' }); }, 120); }
+  }
   // Swipe a row (2.11): right is done, left is pass on. Past a third of the row (or a quick flick) it goes; short of it, it springs back.
   (function () {
     var sw = null;
     document.addEventListener('pointerdown', function (e) {
-      var w = e.target.closest && e.target.closest('.pa-sw'); if (!w || e.target.closest('.pa-tick') || e.button > 0) return;
+      var w = e.target.closest && e.target.closest('.pa-sw'); if (!w || w.classList.contains('open') || e.target.closest('.pa-tick') || e.button > 0) return;
       sw = { w: w, row: w.querySelector('.pa'), x: e.clientX, y: e.clientY, t: Date.now(), dx: 0, on: false, id: e.pointerId };
     });
     document.addEventListener('pointermove', function (e) {
@@ -650,7 +657,7 @@
     });
     var end = function (e) {
       if (!sw || (e && e.pointerId !== sw.id)) return;
-      var s = sw; sw = null; if (!s.on) return;
+      var s = sw; sw = null; if (!s.on) return; swipedAt = Date.now();
       var far = Math.abs(s.dx) > s.w.offsetWidth / 3 || (Math.abs(s.dx) > 60 && Date.now() - s.t < 250);
       s.row.style.transition = '';
       if (far && s.dx > 0) { s.row.style.transform = 'translateX(110%)'; setTimeout(function () { packMark(s.w.dataset.pid); }, MOTION ? 160 : 0); }
@@ -662,6 +669,7 @@
     if (!S.pack && !S.packErr) return '';
     var t = today(), list = packList(), late = list.filter(function (a) { return a.due && a.due < t; }).length;
     list = list.slice().sort(function (a, b) { return (isFresh(b) ? 1 : 0) - (isFresh(a) ? 1 : 0); });   // NEW on top (2.12)
+    if (S.openAct && !list.some(function (a) { return a.id === S.openAct; })) S.openAct = null;
     var show = S.packAll ? list : list.slice(0, 4);
     // Quiet cards (2.13): plain tiles like the rest of the app; age is a small dot and a day count, NEW a thin violet edge
     var dueOf = function (a) {
@@ -671,19 +679,27 @@
       var d = dayDate(a.due); return { txt: d.toLocaleDateString('en-NZ', { weekday: 'short' }) + ' ' + d.getDate(), cls: '' };
     };
     var ago = function (iso) { var m = Math.max(1, Math.round((Date.now() - new Date(iso)) / 60000)); return m < 60 ? m + ' min' : Math.round(m / 60) + ' h'; };
+    // The open card (2.18): grows in place; everything about the action, then Done and Pass on. Swipe is off while it's open.
+    var detail = function (a, days) {
+      var rows = [a.raisedBy ? ['From', esc(a.raisedBy)] : null, a.kind === 'chase' && a.waitingOn ? ['Chasing', esc(a.waitingOn)] : null,
+        a.with && a.with.length ? ['With', esc(a.with.map(function (x) { return '@' + x; }).join(' '))] : null, a.ref ? ['Ref', esc(a.ref)] : null,
+        a.due ? ['Due', esc(dayLabel(a.due))] : null, a.given ? ['Given', esc(dayLabel(String(a.given).slice(0, 10))) + ' · ' + days + 'd'] : null].filter(Boolean);
+      return '<div class="pa-d"><div><div class="pa-di">' + rows.map(function (r) { return '<div class="pa-r"><span>' + r[0] + '</span><b>' + r[1] + '</b></div>'; }).join('') +
+        '<div class="pa-btns"><button type="button" class="btn primary" data-pa="done">✓ Mark done</button><button type="button" class="btn" data-pa="pass">Pass on</button></div></div></div></div>';
+    };
     var row = function (a) {
       var nw = isFresh(a), ag = ageOf(a), days = a.given ? Math.max(0, Math.floor((Date.now() - new Date(a.given)) / 864e5)) : 0, du = dueOf(a);
       var giver = nw ? (S.proj.people || []).filter(function (p) { return p.handle === a.fresh.by; })[0] : null, gname = giver ? giver.name.split(' ')[0] : a.fresh && a.fresh.by ? '@' + a.fresh.by : '';
       var meta = [a.kind === 'chase' ? '↗ chase ' + esc(a.waitingOn) : a.raisedBy ? '↙ from ' + esc(a.raisedBy) : '', a.with && a.with.length ? 'with ' + esc(a.with.map(function (x) { return '@' + x; }).join(' ')) : '', a.ref ? esc(a.ref) : ''].filter(Boolean).join(' · ');
-      return '<div class="pa-sw' + (nw ? ' fresh' : '') + '" data-pid="' + esc(a.id) + '"><div class="pa-bg"><span class="pa-bd">✓ Done</span><span class="pa-bp">Pass on ⇢</span></div><div class="pa" style="--age:' + ag.toFixed(2) + '">' +
+      return '<div class="pa-sw' + (nw ? ' fresh' : '') + (S.openAct === a.id ? ' open' : '') + '" data-pid="' + esc(a.id) + '"><div class="pa-bg"><span class="pa-bd">✓ Done</span><span class="pa-bp">Pass on ⇢</span></div><div class="pa" style="--age:' + ag.toFixed(2) + '">' +
         (nw ? '<div class="pa-new"><i></i>' + (a.fresh.nudge ? 'Nudged by ' : 'New from ') + esc(gname) + ' · ' + ago(a.fresh.at) + '</div>' : '') +
         '<div class="pa-t"><b>' + (a.prio === 1 ? '<i class="pa-p">P1</i>' : '') + esc(a.title) + '</b>' + (du.txt ? '<span class="pa-due' + du.cls + '">' + du.txt + '</span>' : '') + '</div>' +
-        '<div class="pa-m' + (meta ? '' : ' bare') + '"><span>' + meta + '</span>' + '<span class="pa-age"><i></i>' + days + 'd</span>' + '</div></div></div>';
+        '<div class="pa-m' + (meta ? '' : ' bare') + '"><span>' + meta + '</span>' + '<span class="pa-age"><i></i>' + days + 'd</span>' + '</div>' + detail(a, days) + '</div></div>';
     };
     return '<div class="sec">Your actions' + (list.length ? ' · ' + list.length + (late ? ' · <span class="pa-late">' + late + ' late</span>' : '') : '') + '</div>' +
       (S.packErr && !S.pack ? '<div class="bar-warn">' + esc(S.packErr) + '</div>' : '') +
       (list.length ? '<div class="pas">' + show.map(row).join('') + (list.length > 4 ? '<button type="button" class="pa-more" data-act="packall">' + (S.packAll ? 'Show fewer' : 'All ' + list.length) + '</button>' : '') + '</div>' : S.pack ? '<div class="allclear"><div><b>Nothing open</b><span>No actions or chases for you in BTC.</span></div></div>' : '') +
-      (list.length ? '<div class="pa-hint">Swipe right: done · left: pass on</div>' : '') +
+      (list.length ? '<div class="pa-hint">Tap to open · swipe right: done · left: pass on</div>' : '') +
       (function () { var w = (S.packDone || []).filter(function (d) { return !d.sent; }), nd = w.filter(function (d) { return !d.to; }).length, np = w.length - nd;
         return w.length ? '<div class="bar-info">' + [nd ? nd + ' done' : '', np ? np + ' passed on' : ''].filter(Boolean).join(', ') + ' here · ' + ((S.packCfg || {}).key ? 'goes to BTC as soon as there’s signal' : 'goes to BTC with your next ship') + '</div>' : ''; })();
   }
@@ -1326,7 +1342,7 @@
   // (or search) to the days. On the days, Back once says "Press back again to leave"; a second Back leaves. Each open layer
   // is one history entry above a guard entry; sync() keeps the count in step with what's open after every draw.
   var H = { n: 0, guard: false, skip: 0, leaving: null };
-  function layers() { return (S.view !== 'days' ? 1 : 0) + (S.view === 'dayprint' ? 1 : 0) + (sheetOpen() ? 1 : 0) + (S.view === 'day' && S.edit ? 1 : 0) + (S.view === 'day' && S.findOpen ? 1 : 0) + (S.view === 'evidence' && S.evItp ? 1 : 0) + (viewerOpen() ? 1 : 0); }
+  function layers() { return (S.view !== 'days' ? 1 : 0) + (S.view === 'dayprint' ? 1 : 0) + (sheetOpen() ? 1 : 0) + (S.view === 'day' && S.edit ? 1 : 0) + (S.view === 'day' && S.findOpen ? 1 : 0) + (S.view === 'evidence' && S.evItp ? 1 : 0) + (viewerOpen() ? 1 : 0) + (S.view === 'days' && S.openAct ? 1 : 0); }
   function sync() {
     if (!H.ready) return;
     if (!H.guard) { history.pushState({ walk: 'guard' }, ''); H.guard = true; }
@@ -1337,6 +1353,7 @@
   function closeTop() {
     if (viewerOpen()) { closeViewer(); return; }
     if (sheetOpen()) { hideSheet(); return; }
+    if (S.view === 'days' && S.openAct) { setOpenAct(null); return; }
     if (S.view === 'evidence' && S.evItp) { S.evItp = null; S.evLine = null; renderEvidence(); slide('back'); return; }
     if (S.view === 'day' && S.edit) { S.edit = null; S.as = null; renderDay(); return; }
     if (S.view === 'day' && S.findOpen) { S.findOpen = false; S.find = ''; renderDay(); return; }
@@ -1350,9 +1367,17 @@
     H.guard = false; toast('Press back again to leave');
     clearTimeout(H.leaving); H.leaving = setTimeout(function () { if (!H.guard) { history.pushState({ walk: 'guard' }, ''); H.guard = true; } }, 2600);
   });
-  function openDay(d) { wxFetch(); S.view = 'day'; S.day = d; S.find = ''; S.findOpen = false; S.edit = null; S.as = null; render(); }
+  function openDay(d) { wxFetch(); S.openAct = null; S.view = 'day'; S.day = d; S.find = ''; S.findOpen = false; S.edit = null; S.as = null; render(); }
 
   document.addEventListener('click', async function (ev) {
+    var pac = ev.target.closest && ev.target.closest('.pa-sw');
+    if (pac) {   // an action card (2.18): tap opens or closes it; its buttons are Done and Pass on
+      if (Date.now() - swipedAt < 350) return;
+      var pb = ev.target.closest('.pa-d button'), pid = pac.dataset.pid;
+      if (pb) { if (pb.dataset.pa === 'done') { pac.classList.remove('open'); packMark(pid); } else passSheet(pid); return; }
+      if (ev.target.closest('.pa-d')) return;
+      setOpenAct(S.openAct === pid ? null : pid); sync(); buzz(6); return;
+    }
     var t = ev.target.closest('button, [data-day], [data-e], [data-jump], [data-put], [data-line], [data-me], [data-filter], [data-fix]');
     if (t && t.dataset.ins != null) { var bi = $('box'); if (!bi) return; var cur = bi.value; bi.value = /^\w+\.$/.test(t.dataset.ins.trim()) ? t.dataset.ins + cur.replace(/^\s+/, '') : cur.replace(/\s*$/, '') + (cur.trim() ? ' ' : '') + t.dataset.ins.replace(/^\s+/, ''); S.draft = bi.value; bi.focus(); bi.setSelectionRange(bi.value.length, bi.value.length); grow(); reads(); buzz(4); return; }
     if (t && t.dataset.ev) { S.evItp = t.dataset.ev; S.evLine = null; renderEvidence(); slide('fwd'); sync(); return; }
