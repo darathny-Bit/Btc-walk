@@ -5,7 +5,7 @@
    BTC), or by hand from the project file Build makes (⋮ › Load project). Nothing goes anywhere else. */
 'use strict';
 (function () {
-  var VERSION = '2.21';
+  var VERSION = '2.22';
   // iPhone (2.16.1): iOS 27 lays a frozen glass blur over the top of home-screen web apps, so on an iPhone or iPad the top
   // bar is taller, its buttons shifted down below the haze. Undo with the 'ios' class.
   if (/iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) document.documentElement.classList.add('ios');
@@ -601,12 +601,13 @@
     if (S.view === 'days') renderDays();
   }
   function packList() { var done = {}; (S.packDone || []).forEach(function (d) { done[d.id] = 1; }); return ((S.pack && S.pack.actions) || []).filter(function (a) { return !done[a.id]; }); }
-  // Ageing and NEW (2.12, the same as BTC's board): purple when given, brown at 7 days; NEW glows until it's been on screen for 2 seconds
+  // Ageing and NEW (2.12, the same as BTC's board): purple when given, brown at 7 days; NEW glows until you open it (2.22)
   function ageOf(a) { var g = a.given ? (Date.now() - new Date(a.given)) / 864e5 : 0; return isNaN(g) ? 0 : Math.max(0, Math.min(1, g / 7)); }
   function isFresh(a) { if (!a.fresh || !a.fresh.at || Date.now() - new Date(a.fresh.at) > 12 * 36e5) return false; return !(S.packSeen || []).some(function (s) { return s.id === a.id && s.at >= a.fresh.at; }); }
   var seenObs = null, seenT = {};
+  // 2.22: a new card glows until you open it (or swipe it, or 12 hours pass), like hovering on the PC; not 2 s on screen
   function watchSeen() {
-    if (seenObs) seenObs.disconnect(); if (!window.IntersectionObserver) return;
+    if (seenObs) seenObs.disconnect(); return;
     seenObs = new IntersectionObserver(function (es) { es.forEach(function (en) {
       var id = en.target.dataset.pid;
       if (en.isIntersecting && en.intersectionRatio >= 0.6) { if (!seenT[id]) seenT[id] = setTimeout(function () { seenT[id] = null; markSeen(id, en.target); }, 2000); }
@@ -696,6 +697,7 @@
   // Open card (2.18): one at a time. Tap it to open or close; Back, the left-edge swipe or a header tap closes it (it is a layer like the sheet).
   function setOpenAct(id) {
     S.openAct = id || null;
+    if (id) { var fe = document.querySelector('.pa-sw.fresh[data-pid="' + (window.CSS && CSS.escape ? CSS.escape(id) : id) + '"]'); if (fe) markSeen(id, fe); }
     document.querySelectorAll('.pa-sw').forEach(function (el) { el.classList.toggle('open', !!id && el.dataset.pid === id); });
     if (id) { var el = document.querySelector('.pa-sw.open'); if (el) setTimeout(function () { el.scrollIntoView({ block: 'nearest', behavior: MOTION ? 'smooth' : 'auto' }); }, 120); }
   }
@@ -736,10 +738,12 @@
       if (a.due === t) return { txt: 'today', cls: ' today' };
       var d = dayDate(a.due); return { txt: d.toLocaleDateString('en-NZ', { weekday: 'short' }) + ' ' + d.getDate(), cls: '' };
     };
+    var PRI = { 1: ['P1', 'High'], 2: ['P2', 'Medium'], 3: ['P3', 'Low'] };   // the board's priorities (2.22): red, amber, green
     var ago = function (iso) { var m = Math.max(1, Math.round((Date.now() - new Date(iso)) / 60000)); return m < 60 ? m + ' min' : Math.round(m / 60) + ' h'; };
     // The open card (2.18): grows in place; everything about the action, then Done and Pass on. Swipe is off while it's open.
     var detail = function (a, days) {
-      var rows = [a.raisedBy ? ['From', esc(a.raisedBy)] : null, a.kind === 'chase' && a.waitingOn ? ['Chasing', esc(a.waitingOn)] : null,
+      var pr = PRI[a.prio] || PRI[2];
+      var rows = [['Priority', '<i class="pa-p p' + (a.prio === 1 || a.prio === 3 ? a.prio : 2) + '">' + pr[0] + '</i> ' + pr[1]], a.raisedBy ? ['From', esc(a.raisedBy)] : null, a.kind === 'chase' && a.waitingOn ? ['Chasing', esc(a.waitingOn)] : null,
         a.with && a.with.length ? ['With', esc(a.with.map(function (x) { return '@' + x; }).join(' '))] : null, a.ref ? ['Ref', esc(a.ref)] : null,
         a.due ? ['Due', esc(dayLabel(a.due))] : null, a.given ? ['Given', esc(dayLabel(String(a.given).slice(0, 10))) + ' · ' + days + 'd'] : null].filter(Boolean);
       return '<div class="pa-d"><div><div class="pa-di">' + rows.map(function (r) { return '<div class="pa-r"><span>' + r[0] + '</span><b>' + r[1] + '</b></div>'; }).join('') +
@@ -751,7 +755,7 @@
       var meta = [a.kind === 'chase' ? '↗ chase ' + esc(a.waitingOn) : a.raisedBy ? '↙ from ' + esc(a.raisedBy) : '', a.with && a.with.length ? 'with ' + esc(a.with.map(function (x) { return '@' + x; }).join(' ')) : '', a.ref ? esc(a.ref) : ''].filter(Boolean).join(' · ');
       return '<div class="pa-sw' + (nw ? ' fresh' : '') + (S.openAct === a.id ? ' open' : '') + '" data-pid="' + esc(a.id) + '"><div class="pa-bg"><span class="pa-bd">✓ Done</span><span class="pa-bp">Pass on ⇢</span></div><div class="pa" style="--age:' + ag.toFixed(2) + '">' +
         (nw ? '<div class="pa-new"><i></i>' + (a.fresh.nudge ? 'Nudged by ' : 'New from ') + esc(gname) + ' · ' + ago(a.fresh.at) + '</div>' : '') +
-        '<div class="pa-t"><b>' + (a.prio === 1 ? '<i class="pa-p">P1</i>' : '') + esc(a.title) + '</b>' + (du.txt ? '<span class="pa-due' + du.cls + '">' + du.txt + '</span>' : '') + '</div>' +
+        '<div class="pa-t"><b>' + '<i class="pa-p p' + (a.prio === 1 || a.prio === 3 ? a.prio : 2) + (a.prio === 1 ? ' on' : '') + '">' + (PRI[a.prio] || PRI[2])[0] + '</i>' + esc(a.title) + '</b>' + (du.txt ? '<span class="pa-due' + du.cls + '">' + du.txt + '</span>' : '') + '</div>' +
         '<div class="pa-m' + (meta ? '' : ' bare') + '"><span>' + meta + '</span>' + '<span class="pa-age"><i></i>' + days + 'd</span>' + '</div>' + detail(a, days) + '</div></div>';
     };
     return '<div class="sec">Your actions' + (list.length ? ' · ' + list.length + (late ? ' · <span class="pa-late">' + late + ' late</span>' : '') : '') + '</div>' +
@@ -1650,7 +1654,7 @@
   var sw = null;
   document.addEventListener('touchstart', function (ev) {
     sw = null;
-    if (!S.edgeSwipe || ev.touches.length !== 1 || ev.touches[0].clientX > 24 || H.n < 1) return;
+    if (!S.edgeSwipe || ev.touches.length !== 1 || ev.touches[0].clientX > 24 || H.n < 1 || (ev.target.closest && ev.target.closest('canvas, [data-nodrag]'))) return;
     sw = { x: ev.touches[0].clientX, y: ev.touches[0].clientY, dx: 0, el: sheetOpen() ? $('sheet').firstElementChild : main };
   }, { passive: true });
   document.addEventListener('touchmove', function (ev) {
@@ -1668,7 +1672,7 @@
   var sd = null;
   $('sheet').addEventListener('touchstart', function (ev) {
     var sh = $('sheet').firstElementChild; sd = null;
-    if (!sh || ev.touches.length !== 1 || sw || sh.scrollTop > 0 || !sh.contains(ev.target)) return;
+    if (!sh || ev.touches.length !== 1 || sw || sh.scrollTop > 0 || !sh.contains(ev.target) || ev.target.closest('canvas, [data-nodrag]')) return;   // drawing a signature never drags the sheet (2.22)
     sd = { y: ev.touches[0].clientY, dy: 0, el: sh };
   }, { passive: true });
   $('sheet').addEventListener('touchmove', function (ev) {
