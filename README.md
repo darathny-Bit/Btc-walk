@@ -70,6 +70,10 @@ iOS 27 lays a hazy glass over the top of home-screen web apps. On an iPhone or i
 ## The job comes by itself (2.14)
 With the key and team password in (⋮ › Your actions; on the demo it's ⋮ › **Connect to BTC**, first in the list, 2.14.1), the phone looks in btc-drop's `projects/` folder, opens each `.btcpack` with the team password and loads the job it finds over the demo (several: it asks which), then asks who you are. Build sends it (`projects/<job hash>.btcpack`, the project file locked like a pack) when someone makes it (⋮ › Phone project file…) and by itself when anything in it changed; the phone checks for a newer one every 10 minutes at most when it opens, and takes it without touching your days. **Load project…** still works for a file, and now takes any file (an iPhone greys out `.btcproject` otherwise); the app checks it.
 
+## Calmer and easier to tap (2.26)
+
+Home leads with your actions: the greeting is one line, the stat tiles are gone (the week's lines and photos sit on the **Week** tile, ITP lines on **Evidence**) and the demo note moves to the bottom. Only the main button is lime; "Close Sat 28" is orange like the warning it sits in. Section names are plain words, not shouted capitals. Every button is at least 44 px to tap, keyboard focus shows a lime ring, text selection and the cursor are lime, and movement eases out without overshoot. The swipe hint on your actions shows on your first three days, then it's learnt.
+
 ## Clashes go straight away (2.25)
 
 A clash (or, in commissioning mode, a force) goes to BTC a few seconds after you log it, with actions, so Build adds the CL (or Commission the force) within minutes. Its photos follow with Close Day. Edit it before you close and the change goes too. The rest of the day, ITP evidence included, waits for Close Day.

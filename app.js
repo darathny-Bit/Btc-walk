@@ -5,7 +5,7 @@
    BTC), or by hand from the project file Build makes (⋮ › Load project). Nothing goes anywhere else. */
 'use strict';
 (function () {
-  var VERSION = '2.25';
+  var VERSION = '2.26';
   // iPhone (2.16.1): iOS 27 lays a frozen glass blur over the top of home-screen web apps, so on an iPhone or iPad the top
   // bar is taller, its buttons shifted down below the haze. Undo with the 'ios' class.
   if (/iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) document.documentElement.classList.add('ios');
@@ -296,15 +296,15 @@
     var ds = daysOf(), t = today(), waiting = ds.filter(function (d) { return d.unshipped; }), old = ds.filter(function (d) { return d.unshipped && d.day < t; });
     var age = S.proj.made && !S.proj.demo ? Math.floor((Date.now() - new Date(S.proj.made)) / 864e5) : 0;
     var wk = weekOf(t), wc = counts(wk.es), fn = firstName();
-    var html = '<div class="hello"><div class="k">Week ' + weekNo(t) + ' · ' + dayDate(wk.from).getDate() + '–' + dayDate(wk.to).getDate() + ' ' + MO[dayDate(wk.to).getMonth()] + '</div><h1>' + greet() + (fn ? ',<br><span>' + esc(fn) + '.</span>' : '.') + '</h1><div id="wxnow"></div></div>' +
-      '<div class="stats"><button type="button" class="stat" data-act="recap"><b>' + wk.es.length + '</b><span>lines this week</span></button><button type="button" class="stat" data-act="recap"><b>' + wc.photo + '</b><span>photos</span></button><button type="button" class="stat i" data-act="evidence"><b>' + itpLinesDone(wk.es) + '</b><span>ITP lines</span></button></div>';
-    if (S.proj.demo) html += '<div class="bar-info">Demo job (made-up names). Connect to BTC in ⋮ and your job loads by itself.</div>';
-    else if (age >= 7) html += '<div class="bar-warn">Project file is ' + age + ' days old<button type="button" data-act="load">Reload</button></div>';
+    // 2.26 (Impeccable pass): no kicker above the greeting and no stat tiles; the week's figures live on the two tools
+    var html = '<div class="hello"><h1>' + greet() + (fn ? ', <span>' + esc(fn) + '.</span>' : '.') + '</h1><div id="wxnow"></div></div>';
+    var demoNote = S.proj.demo ? '<div class="bar-info">Demo job (made-up names). Connect to BTC in ⋮ and your job loads by itself.</div>' : '';
+    if (!S.proj.demo && age >= 7) html += '<div class="bar-warn">Project file is ' + age + ' days old<button type="button" data-act="load">Reload</button></div>';
     var open = toClose(ds, t).sort(function (a, b) { return a.day < b.day ? -1 : 1; }), sending = ds.filter(function (d) { return d.unshipped && closedDay(d.day); });
     if (open.length) { var od = dayDate(open[0].day); html += '<div class="bar-warn">' + (open.length === 1 ? esc(dayLabel(open[0].day)) + ' isn’t closed' : open.length + ' days aren’t closed') + '<button type="button" data-act="closeday" data-v="' + open[0].day + '">Close ' + WD[od.getDay()] + ' ' + od.getDate() + '</button></div>'; }
     else if (ds.length && !waiting.length) html += '<div class="allclear"><i>' + TICK.replace('currentColor', '#7BE0A6') + '</i><div><b>All clear</b><span>Everything is in BTC. Nothing waiting.</span></div></div>';
     html += packHtml();
-    if (ds.length) html += '<div class="tools"><button type="button" class="tool i" data-act="evidence"><b>Evidence</b><span>Photos by ITP line</span></button><button type="button" class="tool" data-act="recap"><b>This week</b><span>Your week on the record</span></button></div>';
+    if (ds.length) { var nI = itpLinesDone(wk.es); html += '<div class="tools"><button type="button" class="tool" data-act="recap"><b>Week ' + weekNo(t) + '</b><span>' + wk.es.length + ' line' + (wk.es.length === 1 ? '' : 's') + ' · ' + wc.photo + ' photo' + (wc.photo === 1 ? '' : 's') + '</span></button><button type="button" class="tool i" data-act="evidence"><b>Evidence</b><span>' + (nI ? nI + ' ITP line' + (nI === 1 ? '' : 's') + ' this week' : 'Photos by ITP line') + '</span></button></div>'; }
     var cutoff = addDays(t, -6), recent = ds.filter(function (d) { return d.day >= cutoff; }), earlier = ds.filter(function (d) { return d.day < cutoff; });
     var card = function (d) {
       var c = counts(d.entries), isT = d.day === t, dd = dayDate(d.day);
@@ -315,6 +315,7 @@
     };
     if (recent.length) html += '<div class="kick">This week</div>' + recent.map(card).join('');
     if (earlier.length) html += S.showEarlier ? '<div class="kick">Earlier</div>' + earlier.map(card).join('') : '<button type="button" class="day" data-act="earlier"><span class="muted small">Earlier · ' + earlier.length + ' day' + (earlier.length > 1 ? 's' : '') + (toClose(earlier, today()).length ? '' : ', all closed') + ' ▸</span></button>';
+    html += demoNote;
     if (!ds.length) html += '<div class="empty"><b>Nothing logged yet.</b><br>Start the day and type: a note, a photo, a clash (<b>what changed ; what next</b>) or an action (<b>@person</b>). A day you don’t log anything has no card.</div>';
     var hasT = ds.some(function (d) { return d.day === t; });
     var sc0 = main.querySelector('.scroll'), keepY = sc0 && sc0.querySelector('.hello') ? sc0.scrollTop : 0;   // a redraw keeps your place (2.12)
@@ -757,6 +758,8 @@
     };
     document.addEventListener('pointerup', end); document.addEventListener('pointercancel', function () { if (sw) { sw.row.style.transition = ''; sw.row.style.transform = ''; sw.w.classList.remove('go'); sw = null; } });
   })();
+  // the swipe hint shows on the first few days you have actions, then it's learnt (2.26)
+  function hintLeft() { try { var k = 'btcwalk.hint', v = JSON.parse(localStorage.getItem(k) || '{"n":0,"d":""}'), d = today(); if (v.d !== d) { v.n++; v.d = d; localStorage.setItem(k, JSON.stringify(v)); } return v.n <= 3; } catch (e) { return true; } }
   function packHtml() {
     if (!S.pack && !S.packErr) return '';
     var t = today(), list = packList(), late = list.filter(function (a) { return a.due && a.due < t; }).length;
@@ -794,7 +797,7 @@
     return '<div class="sec">Your actions' + (list.length ? ' · ' + list.length + (late ? ' · <span class="pa-late">' + late + ' late</span>' : '') : '') + '</div>' +
       (S.packErr && !S.pack ? '<div class="bar-warn">' + esc(S.packErr) + '</div>' : '') +
       (list.length ? '<div class="pas">' + show.map(row).join('') + (list.length > 4 ? '<button type="button" class="pa-more" data-act="packall">' + (S.packAll ? 'Show fewer' : 'All ' + list.length) + '</button>' : '') + '</div>' : S.pack ? '<div class="allclear"><div><b>Nothing open</b><span>No actions or chases for you in BTC.</span></div></div>' : '') +
-      (list.length ? '<div class="pa-hint">Tap to open · swipe right: done · left: pass on</div>' : '') +
+      (list.length && hintLeft() ? '<div class="pa-hint">Tap to open · swipe right: done · left: pass on</div>' : '') +
       (function () { var w = (S.packDone || []).filter(function (d) { return !d.sent; }), nd = w.filter(function (d) { return !d.to; }).length, np = w.length - nd;
         return w.length ? '<div class="bar-info">' + [nd ? nd + ' done' : '', np ? np + ' passed on' : ''].filter(Boolean).join(', ') + ' here · ' + ((S.packCfg || {}).key ? 'goes to BTC as soon as there’s signal' : 'goes to BTC when you close the day') + '</div>' : ''; })();
   }
