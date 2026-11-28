@@ -488,3 +488,17 @@ html.cx body::after { content: ''; position: fixed; inset: 0; z-index: 50; point
 @keyframes wg-in { from { opacity: 0; } } @keyframes wg-pop { from { transform: scale(.6); opacity: 0; } } @keyframes wg-wob { 50% { transform: rotate(-14deg) scale(1.08); } }
 @keyframes wg-fall { to { transform: translateY(620px) rotate(720deg); opacity: .2; } }
 @media (prefers-reduced-motion: reduce) { .wings * { animation: none !important; } }
+
+/* 2.23: P0 (works stopped), its close-out, lesson lines */
+.pa-p.p0 { color: #fff; background: #B3122E; animation: p0p 1.6s ease-in-out infinite; }
+@keyframes p0p { 50% { box-shadow: 0 0 0 5px rgba(179,18,46,0); } 0%, 100% { box-shadow: 0 0 0 0 rgba(179,18,46,.55); } }
+@media (prefers-reduced-motion: reduce) { .pa-p.p0 { animation: none; } }
+.p0k { font-size: 12px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: #FF6B7D; margin-bottom: 4px; }
+.list button.p0yes { border-color: #B3122E; background: rgba(179,18,46,.18); }
+.p0why { display: flex; flex-wrap: wrap; gap: 8px; }
+.p0why button { min-height: 38px; padding: 0 14px; border-radius: 19px; border: 1px solid var(--line, #2A3033); background: var(--panel2, #171B1D); color: var(--ink, #fff); font-size: 14px; font-weight: 600; }
+.p0why button.on { background: #B3122E; border-color: #B3122E; color: #fff; }
+.fld-in { width: 100%; margin-top: 8px; padding: 12px; border-radius: 12px; border: 1px solid var(--line, #2A3033); background: var(--panel2, #171B1D); color: var(--ink, #fff); font: 16px inherit; box-sizing: border-box; }
+.p0ns { display: flex; align-items: center; gap: 10px; margin-top: 12px; color: var(--ink2, #AEB7BD); font-size: 14px; }
+.p0ns input { width: 20px; height: 20px; }
+.e.lesson::before { background: #22B8CF; } .lesson .e-k { color: #22B8CF; }

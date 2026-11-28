@@ -5,7 +5,7 @@
    BTC), or by hand from the project file Build makes (⋮ › Load project). Nothing goes anywhere else. */
 'use strict';
 (function () {
-  var VERSION = '2.22';
+  var VERSION = '2.23';
   // iPhone (2.16.1): iOS 27 lays a frozen glass blur over the top of home-screen web apps, so on an iPhone or iPad the top
   // bar is taller, its buttons shifted down below the haze. Undo with the 'ios' class.
   if (/iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) document.documentElement.classList.add('ios');
@@ -120,8 +120,8 @@
   // PC. @clash is the same as clash. (and the old @flow-on).
   // 2.1: delay. (lost time, "2h"), instruction. (EI/SI, who gave it with @), crew. (who's on site, "HEB 6, sparkies 4"),
   // visitor. and weather. (or a weather word on its own line: rainy, fine, windy…).
-  var LEAD = /^(note|action|clash|force|bridge|flow(?:-?on)?|itp|delay|instruction|instr|ei|si|crew|labour|visitor|visit|weather|wx)\.(?=\s|$)\s*/i;
-  var LEADMAP = { delay: 'delay', instruction: 'instruction', instr: 'instruction', ei: 'instruction', si: 'instruction', crew: 'crew', labour: 'crew', visitor: 'visitor', visit: 'visitor', weather: 'weather', wx: 'weather' };
+  var LEAD = /^(note|action|clash|force|bridge|flow(?:-?on)?|itp|delay|instruction|instr|ei|si|crew|labour|visitor|visit|weather|wx|lesson|ll)\.(?=\s|$)\s*/i;
+  var LEADMAP = { lesson: 'lesson', ll: 'lesson', delay: 'delay', instruction: 'instruction', instr: 'instruction', ei: 'instruction', si: 'instruction', crew: 'crew', labour: 'crew', visitor: 'visitor', visit: 'visitor', weather: 'weather', wx: 'weather' };
   // 2.3: a line only about the weather is weather, however it's said ("pissing down since lunch", "8 deg and blowing a gale").
   // Every word has to be a weather word, a small word, a time or a number with a unit; at least one has to say something.
   var WXCORE = /^(cleared|clearing|fine|sunny|sun|clear|dry|cloudy|cloud|clouds|overcast|grey|gray|showers?|showery|drizzle|drizzly|drizzling|spitting|mizzle|rain|rainy|raining|rained|wet|pouring|poured|pissing|bucketing|hosing|teeming|storm|stormy|thunder|thunderstorm|lightning|hail|hailing|sleet|snow|snowing|windy|gusty|gusts?|gale|breezy|breeze|wind|calm|still|cold|freezing|chilly|cool|warm|hot|scorcher|boiling|muggy|humid|frost|frosty|fog|foggy|mist|misty|southerly|northerly|easterly|westerly|nor'?west(er|erly)?|sou'?west(er|erly)?|nor'?east(er|erly)?|sou'?east(er|erly)?)$/;
@@ -194,7 +194,7 @@
       if (m) out.notFound.push(m[1]);
       i++;
     }
-    var pm = /(^|\s)P([123])(?=\s|$)/i.exec(text);
+    var pm = /(^|\s)P([0123])(?=\s|$)/i.exec(text);   // P0 (2.23): works stopped now
     if (pm) { out.priority = 'P' + pm[2]; text = (text.slice(0, pm.index) + text.slice(pm.index + pm[0].length)).replace(/\s{2,}/g, ' '); }
     var d = parseDue(text, day || today()); text = d.text; out.due = d.due;
     text = text.trim();
@@ -226,7 +226,7 @@
     var re = new RegExp('(^|\\s)(?:(?:from|per|chase)\\s+)?@(' + p.party.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')(?=[\\s,.;:]|$)', 'i');
     return v.replace(re, '$1' + (p.dir === 'ours' ? 'chase' : 'from') + ' @$2');
   }
-  var TYPE = { note: 'Note', flowon: 'Clash', force: 'Force', tagphoto: 'Tag photo', action: 'Action', itp: 'ITP', delay: 'Delay', instruction: 'Instruction', crew: 'Crew', visitor: 'Visitor', weather: 'Weather' };
+  var TYPE = { note: 'Note', flowon: 'Clash', force: 'Force', tagphoto: 'Tag photo', lesson: 'Lesson', action: 'Action', itp: 'ITP', delay: 'Delay', instruction: 'Instruction', crew: 'Crew', visitor: 'Visitor', weather: 'Weather' };
   var CYCLE = ['note', 'flowon', 'action', 'itp'], CXCYCLE = ['note', 'force', 'action', 'tagphoto'];
   function cycle() { return S.cx ? CXCYCLE : CYCLE; }
   function clashy(t) { return t === 'flowon' || t === 'force'; }
@@ -473,6 +473,11 @@
     var p = parse(raw, S.day);
     if (p.move) { S.loc = p.move; await kvSet('loc', S.loc); S.draft = ''; b.value = ''; toast('At ' + p.move.name); renderDay(); return; }
     var type = S.as || p.type, now = new Date().toISOString();
+    var prevE = S.edit ? S.entries.filter(function (x) { return x.id === S.edit; })[0] : null;
+    if (p.priority === 'P0' && type === 'action' && !(prevE && prevE.priority === 'P0')) {   // P0 shouldn't be used lightly (2.23)
+      var st0 = await stopAsk(p.text); if (st0 === null) return;
+      if (st0 === 1) { raw = raw.replace(/(^|\s)P0(?=\s|$)/i, '$1P1'); p = parse(raw, S.day); }
+    }
     if (S.cx && type === 'note' && p.tag && S.photos.length) type = 'tagphoto';   // a photo on a plant tag (2.19)
     if (p.party && p.partyNew) await learnParty(p.party);
     var where = p.there ? {} : S.loc ? { area: S.loc.area || '', itp: S.loc.itp || '', tag: S.loc.tag || '' } : {};
@@ -640,7 +645,7 @@
       walks: [], removed: [], closures: [],
       entries: acts.map(function (e) { return { id: e.id, day: e.day, time: e.time, type: e.type, raw: e.raw, text: e.text, action: e.action, who: e.who, party: e.party || '', dir: e.dir || '', area: e.area, itp: e.itp, line: e.line || '', tag: e.tag, location: e.location, priority: e.priority, due: e.due, photos: [], edited: e.edited, was: e.was, amendedAt: e.amendedAt }; }) };
     var d1 = dn.filter(function (d) { return !d.to; }), d2 = dn.filter(function (d) { return d.to; });
-    if (d1.length) body.actionsDone = d1.map(function (d) { return { id: d.id, file: d.file, at: d.at }; });
+    if (d1.length) body.actionsDone = d1.map(function (d) { return { id: d.id, file: d.file, at: d.at, p0: d.p0 }; });
     if (d2.length) body.actionsPassed = d2.map(function (d) { return { id: d.id, file: d.file, at: d.at, to: d.to }; });
     if (sn.length) body.actionsSeen = sn.map(function (s) { return { id: s.id, file: s.file, at: s.at }; });
     var n = new Date(), name = (S.proj.project.code || 'BTC').replace(/[^A-Za-z0-9]+/g, '') + '_' + S.me.handle + '_' + today() + '_' + String(n.getHours()).padStart(2, '0') + String(n.getMinutes()).padStart(2, '0') + String(n.getSeconds()).padStart(2, '0') + '_actions.btcwalk.txt';
@@ -679,12 +684,31 @@
   }
 
   // Done or passed on, on site (2.8; pass on 2.11): off the list now, to BTC with the next ship; Undo for 6 seconds puts it back
-  async function packMark(pid, to) {
+  async function packMark(pid, to, why) {
     var a = ((S.pack && S.pack.actions) || []).filter(function (x) { return x.id === pid; })[0]; if (!a) return;
+    if (!to && a.prio === 0 && !why) { renderDays(); p0Sheet(a); return; }   // a P0 asks why and the lesson before it's done (2.23)
     var who = to ? (S.proj.people || []).filter(function (p) { return p.handle === to; })[0] : null;
-    S.packDone = (S.packDone || []).concat([Object.assign({ id: pid, file: a.file || '', at: new Date().toISOString() }, to ? { to: to } : {})]);
+    S.packDone = (S.packDone || []).concat([Object.assign({ id: pid, file: a.file || '', at: new Date().toISOString() }, to ? { to: to } : {}, why ? { p0: why } : {})]);
     await kvSet('packDone:' + S.proj.project.id, S.packDone); buzz(to ? [8, 40, 8] : 10); S.openAct = null; renderDays(); sync(); syncSoon(6500);
     toast(to ? 'Passed on to ' + (who ? who.name.split(' ')[0] : '@' + to) : 'Done', false, { label: 'Undo', ms: 6000, fn: async function () { S.packDone = S.packDone.filter(function (d) { return d.id !== pid || d.sent; }); await kvSet('packDone:' + S.proj.project.id, S.packDone); renderDays(); } });
+  }
+  // P0 (2.23): raised only when works are stopped; closed only with why it got there and the lesson (Lessons learnt in BTC)
+  var P0WHY = ['Late information', 'Design or drawing', 'Supplier or delivery', 'Permit or access', 'Coordination between trades', 'Plant or equipment', 'Weather', 'Other'];
+  function stopAsk(title) {
+    return new Promise(function (res) {
+      S.stopRes = res;
+      sheet('<div class="grip"></div><div class="p0k">P0 · works stopped</div><h2>Are works physically stopped right now?</h2>' + (title ? '<p><b>' + esc(title) + '</b></p>' : '') +
+        '<p class="small">P0 is only for work that can’t go on. It’s logged, and asks why when it’s closed.</p>' +
+        '<div class="list"><button type="button" class="p0yes" data-act="stopyes"><span class="lt"><b>Yes, works are stopped</b><span>Keep it P0</span></span></button><button type="button" data-act="stopno"><span class="lt"><b>No</b><span>Make it P1</span></span></button></div>');
+    });
+  }
+  function p0Sheet(a) {
+    S.p0For = a.id; S.p0Why = '';
+    sheet('<div class="grip"></div><div class="p0k">Closing a P0</div><h2>' + esc(a.title) + '</h2><div class="sec">Why did it get to P0?</div><div class="p0why">' + P0WHY.map(function (w) { return '<button type="button" data-p0why="' + esc(w) + '">' + esc(w) + '</button>'; }).join('') + '</div>' +
+      '<input type="text" id="p0-other" class="fld-in" placeholder="Other: say what" hidden>' +
+      '<div class="sec">What would have caught it earlier?</div><textarea id="p0-l" class="fld-in" rows="2" placeholder="One line: the lesson"></textarea>' +
+      '<label class="p0ns"><input type="checkbox" id="p0-ns"> Wasn’t a real stop</label>' +
+      '<button type="button" class="btn primary" data-act="p0done" style="width:100%;min-height:52px;margin-top:12px">Done</button>');
   }
   function passSheet(pid) {
     var a = ((S.pack && S.pack.actions) || []).filter(function (x) { return x.id === pid; })[0]; if (!a) return;
@@ -728,7 +752,7 @@
   function packHtml() {
     if (!S.pack && !S.packErr) return '';
     var t = today(), list = packList(), late = list.filter(function (a) { return a.due && a.due < t; }).length;
-    list = list.slice().sort(function (a, b) { return (isFresh(b) ? 1 : 0) - (isFresh(a) ? 1 : 0); });   // NEW on top (2.12)
+    list = list.slice().sort(function (a, b) { return (a.prio === 0 ? 0 : 1) - (b.prio === 0 ? 0 : 1) || (isFresh(b) ? 1 : 0) - (isFresh(a) ? 1 : 0); });   // P0 first (2.23), then NEW (2.12)
     if (S.openAct && !list.some(function (a) { return a.id === S.openAct; })) S.openAct = null;
     var show = S.packAll ? list : list.slice(0, 4);
     // Quiet cards (2.13): plain tiles like the rest of the app; age is a small dot and a day count, NEW a thin violet edge
@@ -738,12 +762,13 @@
       if (a.due === t) return { txt: 'today', cls: ' today' };
       var d = dayDate(a.due); return { txt: d.toLocaleDateString('en-NZ', { weekday: 'short' }) + ' ' + d.getDate(), cls: '' };
     };
-    var PRI = { 1: ['P1', 'High'], 2: ['P2', 'Medium'], 3: ['P3', 'Low'] };   // the board's priorities (2.22): red, amber, green
+    var PRI = { 0: ['P0', 'Works stopped'], 1: ['P1', 'Critical path'], 2: ['P2', 'This week'], 3: ['P3', 'Quiet window'] };   // the board's priorities (2.22; P0 2.23)
+    var pn = function (a) { return a.prio === 0 || a.prio === 1 || a.prio === 3 ? a.prio : 2; };
     var ago = function (iso) { var m = Math.max(1, Math.round((Date.now() - new Date(iso)) / 60000)); return m < 60 ? m + ' min' : Math.round(m / 60) + ' h'; };
     // The open card (2.18): grows in place; everything about the action, then Done and Pass on. Swipe is off while it's open.
     var detail = function (a, days) {
-      var pr = PRI[a.prio] || PRI[2];
-      var rows = [['Priority', '<i class="pa-p p' + (a.prio === 1 || a.prio === 3 ? a.prio : 2) + '">' + pr[0] + '</i> ' + pr[1]], a.raisedBy ? ['From', esc(a.raisedBy)] : null, a.kind === 'chase' && a.waitingOn ? ['Chasing', esc(a.waitingOn)] : null,
+      var pr = PRI[pn(a)];
+      var rows = [['Priority', '<i class="pa-p p' + pn(a) + '">' + pr[0] + '</i> ' + pr[1]], a.raisedBy ? ['From', esc(a.raisedBy)] : null, a.kind === 'chase' && a.waitingOn ? ['Chasing', esc(a.waitingOn)] : null,
         a.with && a.with.length ? ['With', esc(a.with.map(function (x) { return '@' + x; }).join(' '))] : null, a.ref ? ['Ref', esc(a.ref)] : null,
         a.due ? ['Due', esc(dayLabel(a.due))] : null, a.given ? ['Given', esc(dayLabel(String(a.given).slice(0, 10))) + ' · ' + days + 'd'] : null].filter(Boolean);
       return '<div class="pa-d"><div><div class="pa-di">' + rows.map(function (r) { return '<div class="pa-r"><span>' + r[0] + '</span><b>' + r[1] + '</b></div>'; }).join('') +
@@ -755,7 +780,7 @@
       var meta = [a.kind === 'chase' ? '↗ chase ' + esc(a.waitingOn) : a.raisedBy ? '↙ from ' + esc(a.raisedBy) : '', a.with && a.with.length ? 'with ' + esc(a.with.map(function (x) { return '@' + x; }).join(' ')) : '', a.ref ? esc(a.ref) : ''].filter(Boolean).join(' · ');
       return '<div class="pa-sw' + (nw ? ' fresh' : '') + (S.openAct === a.id ? ' open' : '') + '" data-pid="' + esc(a.id) + '"><div class="pa-bg"><span class="pa-bd">✓ Done</span><span class="pa-bp">Pass on ⇢</span></div><div class="pa" style="--age:' + ag.toFixed(2) + '">' +
         (nw ? '<div class="pa-new"><i></i>' + (a.fresh.nudge ? 'Nudged by ' : 'New from ') + esc(gname) + ' · ' + ago(a.fresh.at) + '</div>' : '') +
-        '<div class="pa-t"><b>' + '<i class="pa-p p' + (a.prio === 1 || a.prio === 3 ? a.prio : 2) + (a.prio === 1 ? ' on' : '') + '">' + (PRI[a.prio] || PRI[2])[0] + '</i>' + esc(a.title) + '</b>' + (du.txt ? '<span class="pa-due' + du.cls + '">' + du.txt + '</span>' : '') + '</div>' +
+        '<div class="pa-t"><b>' + '<i class="pa-p p' + pn(a) + (pn(a) <= 1 ? ' on' : '') + '">' + PRI[pn(a)][0] + '</i>' + esc(a.title) + '</b>' + (du.txt ? '<span class="pa-due' + du.cls + '">' + du.txt + '</span>' : '') + '</div>' +
         '<div class="pa-m' + (meta ? '' : ' bare') + '"><span>' + meta + '</span>' + '<span class="pa-age"><i></i>' + days + 'd</span>' + '</div>' + detail(a, days) + '</div></div>';
     };
     return '<div class="sec">Your actions' + (list.length ? ' · ' + list.length + (late ? ' · <span class="pa-late">' + late + ' late</span>' : '') : '') + '</div>' +
@@ -804,7 +829,7 @@
     var wx = {}; for (var wi = 0; wi < pick.length; wi++) { var fc = await wxForecast(pick[wi].day), st0 = await wxStart(pick[wi].day); if (fc || st0) wx[pick[wi].day] = Object.assign({}, fc || { day: pick[wi].day, source: 'MET Norway', hours: {} }, st0 ? { start: st0 } : {}); }
     if (Object.keys(wx).length) body.weather = wx;
     if (CL) body.close = { date: CL.date, at: CL.at, sig: CL.sig, title: CL.title, reviewer: CL.reviewer };   // Close the day (2.9): signed here
-    var dn = (S.packDone || []).filter(function (d) { return !d.sent; }); if (dn.some(function (d) { return !d.to; })) body.actionsDone = dn.filter(function (d) { return !d.to; }).map(function (d) { return { id: d.id, file: d.file, at: d.at }; });   // ticked on site (2.8)
+    var dn = (S.packDone || []).filter(function (d) { return !d.sent; }); if (dn.some(function (d) { return !d.to; })) body.actionsDone = dn.filter(function (d) { return !d.to; }).map(function (d) { return { id: d.id, file: d.file, at: d.at, p0: d.p0 }; });   // ticked on site (2.8)
     if (dn.some(function (d) { return d.to; })) body.actionsPassed = dn.filter(function (d) { return d.to; }).map(function (d) { return { id: d.id, file: d.file, at: d.at, to: d.to }; });   // swiped left, passed on (2.11)
     var np2 = (S.newParties || []).filter(function (x) { return !(S.proj.parties || []).some(function (y) { return key(y.name) === key(x.name); }); });
     if (np2.length) body.parties = np2.map(function (x) { return { name: x.name, role: x.role || '', contact: x.contact || '' }; });   // new to BTC (2.4)   // the forecast BTC needs to draw the job's weather (2.1); logged weather goes as lines
@@ -960,7 +985,7 @@
       '<button type="button" data-act="wxset"><span class="lt"><b>Weather: ' + (wxOn() ? 'on' : 'off') + '</b><span>' + (wxOn() ? 'Forecast from MET Norway' + (siteLoc() ? '' : ' · set the site location') : 'Fill in each day’s weather from MET Norway') + '</span></span></button>' +
       (p.demo ? '' : '<button type="button" data-act="demo"><span class="lt"><b>Try the demo</b><span>A made-up job to practise on. Your job’s lines stay on the phone.</span></span></button>') + '</div>' +
       '<div class="sec">On this phone</div>' + (function () { var o = oldShipped(); return o.length ? '<div class="list"><button type="button" data-act="clearold"><span class="lt"><b>Free up space</b><span>Clear ' + o.length + ' shipped line' + (o.length === 1 ? '' : 's') + ' older than a month (' + (JSON.stringify(o).length / 1048576).toFixed(1) + ' MB). They’re safe in BTC.</span></span></button></div>' : ''; })() + '<p>' + n + ' line' + (n === 1 ? '' : 's') + ' for this job. Lines stay on this phone until you close the day; actions go to BTC straight away. Keep BTC Walk on your Home Screen (Safari › Share › Add to Home Screen) so the phone keeps them.</p>' +
-      '<div class="sec">How to write</div><p><b>plinth moved 25 mm ; shop drawing 25 mm shorter</b> is a clash (or use --). <b>@NH</b> makes it NH’s action; <b>P1</b>, <b>fri</b>, <b>28-11</b> set priority and due. <b>@SBR 1</b> or <b>@ITP-06</b> tags where it is; <b>at SBR 1</b> on its own moves you there. Tap <b>LOG AS</b> to change the type.</p>' +
+      '<div class="sec">How to write</div><p><b>plinth moved 25 mm ; shop drawing 25 mm shorter</b> is a clash (or use --). <b>@NH</b> makes it NH’s action; <b>P0</b> (works stopped) to <b>P3</b>, <b>fri</b>, <b>28-11</b> set priority and due. <b>lesson.</b> adds a lesson learnt. <b>@SBR 1</b> or <b>@ITP-06</b> tags where it is; <b>at SBR 1</b> on its own moves you there. Tap <b>LOG AS</b> to change the type.</p>' +
       '<div class="sec">This app</div><div class="list"><button type="button" data-act="checkupd"><span class="lt"><b>BTC Walk ' + esc(VERSION) + '</b><span>' + (upd.seen && upd.seen !== VERSION ? 'Version ' + esc(upd.seen) + ' is out: tap to check again' : 'Check for an update') + '</span></span></button></div>');
   }
   // Sheets rise from the bottom and slide away; drag one down to close it (1.3).
@@ -969,6 +994,7 @@
   function sheetOpen() { var s = $('sheet'); return !s.hidden && !s.classList.contains('out'); }
   function hideSheet(after) {
     var s = $('sheet'); if (!sheetOpen()) return;
+    if (S.stopRes) { var sr0 = S.stopRes; S.stopRes = null; sr0(null); }   // the P0 question closed without an answer: nothing is saved
     s.classList.add('out'); clearTimeout(sheetT);
     sheetT = setTimeout(function () { s.hidden = true; s.innerHTML = ''; s.classList.remove('out'); if (after) after(); }, MOTION ? 200 : 0);
   }
@@ -1432,6 +1458,7 @@
     if (t && t.dataset.ins != null) { var bi = $('box'); if (!bi) return; var cur = bi.value; bi.value = /^\w+\.$/.test(t.dataset.ins.trim()) ? t.dataset.ins + cur.replace(/^\s+/, '') : cur.replace(/\s*$/, '') + (cur.trim() ? ' ' : '') + t.dataset.ins.replace(/^\s+/, ''); S.draft = bi.value; bi.focus(); bi.setSelectionRange(bi.value.length, bi.value.length); grow(); reads(); buzz(4); return; }
     if (t && t.dataset.ev) { S.evItp = t.dataset.ev; S.evLine = null; renderEvidence(); slide('fwd'); sync(); return; }
     if (t && t.dataset.evl) { S.evLine = S.evLine === t.dataset.evl ? null : t.dataset.evl; renderEvidence(); return; }
+    if (t && t.dataset.p0why) { S.p0Why = t.dataset.p0why; document.querySelectorAll('[data-p0why]').forEach(function (o) { o.classList.toggle('on', o === t); }); $('p0-other').hidden = S.p0Why !== 'Other'; return; }
     if (t && t.dataset.passto) { var pp = S.passFor; S.passFor = null; closeSheet(); if (pp) packMark(pp, t.dataset.passto); return; }
     if (t && t.dataset.ph != null) { S.viewBin = false; viewer(+t.dataset.ph); return; }
     var lph = ev.target.closest && ev.target.closest('[data-lph]');
@@ -1498,6 +1525,12 @@
     else if (act === 'checkupd') { closeSheet(); checkUpdate(true); }
     else if (act === 'earlier') { S.showEarlier = true; renderDays(); }
     else if (act === 'ship') { var oc = toClose(daysOf(), today()); closeDaySheet(oc.length ? oc[0].day : today()); }
+    else if (act === 'stopyes' || act === 'stopno') { var sr = S.stopRes; S.stopRes = null; closeSheet(); if (sr) sr(act === 'stopyes' ? 0 : 1); }
+    else if (act === 'p0done') {
+      var pw = S.p0Why === 'Other' ? ($('p0-other').value.trim() ? 'Other: ' + $('p0-other').value.trim() : '') : S.p0Why, pl = $('p0-l').value.trim();
+      if (!pw) { toast('Pick why it got to P0.', true); return; } if (!pl) { toast('Say what would have caught it earlier: it’s the lesson.', true); $('p0-l').focus(); return; }
+      var pid0 = S.p0For; S.p0For = null; closeSheet(); packMark(pid0, null, { why: pw, lesson: pl, notStop: $('p0-ns') ? $('p0-ns').checked : false });
+    }
     else if (act === 'closedinfo') toast('Closed and in BTC. A change you make now goes by itself' + ((S.closed || {})[today()] ? ' and your reviewer signs again' : '') + '.');
     else if (act === 'closeday') { closeSheet(); closeDaySheet(t.dataset.v || today()); }
     else if (act === 'sendnow') { closeSheet(); var sn = daysOf().filter(function (d) { return d.unshipped; }); if (!sn.length) { toast('Nothing new to send: BTC has it all.'); return; } S.shipPick = {}; sn.forEach(function (d) { S.shipPick[d.day] = true; }); await doShip({ quiet: true, why: 'now' }); }

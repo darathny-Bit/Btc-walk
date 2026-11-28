@@ -70,6 +70,10 @@ iOS 27 lays a hazy glass over the top of home-screen web apps. On an iPhone or i
 ## The job comes by itself (2.14)
 With the key and team password in (⋮ › Your actions; on the demo it's ⋮ › **Connect to BTC**, first in the list, 2.14.1), the phone looks in btc-drop's `projects/` folder, opens each `.btcpack` with the team password and loads the job it finds over the demo (several: it asks which), then asks who you are. Build sends it (`projects/<job hash>.btcpack`, the project file locked like a pack) when someone makes it (⋮ › Phone project file…) and by itself when anything in it changed; the phone checks for a newer one every 10 minutes at most when it opens, and takes it without touching your days. **Load project…** still works for a file, and now takes any file (an iPhone greys out `.btcproject` otherwise); the app checks it.
 
+## P0 and lessons (2.23)
+
+`P0` (works physically stopped now) asks once: Yes keeps it P0, No makes it P1. A P0 sits first on Your actions, red and pulsing. Done on a P0 asks why it got there and what would have caught it earlier (and "Wasn't a real stop"); they go with the done (`actionsDone[].p0`) into BTC's Lessons learnt. `lesson.` at the start of a line is a lesson learnt (`type: 'lesson'`).
+
 ## Priority, the glow and signing (2.22)
 
 - **Priority:** P1 shows on the card (red); open a card and it shows its P1 / P2 / P3 chip (red, amber, green, as on BTC's board) and a Priority line.
