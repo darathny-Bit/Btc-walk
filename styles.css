@@ -472,3 +472,17 @@ html.cx body::after { content: ''; position: fixed; inset: 0; z-index: 50; point
 .chip.cx { background: var(--cxg-soft); color: var(--cxg); }
 .dot-x, .dot-t { font-size: 0; width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
 .dot-x { background: var(--force); color: var(--force); } .dot-t { background: var(--cxg); color: var(--cxg); }
+
+/* 2.20: Wings Friday (an Easter egg) */
+.wings { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; background: rgba(0,0,0,.72); backdrop-filter: blur(3px); animation: wg-in .25s ease; }
+.wings .wc { position: relative; width: min(360px, calc(100vw - 32px)); padding: 30px 22px 22px; border-radius: 26px; background: var(--panel, #111416); border: 1px solid var(--line, #22282B); text-align: center; overflow: hidden; animation: wg-pop .5s cubic-bezier(.2,1.6,.4,1); }
+.wings .we { font-size: 64px; line-height: 1; display: inline-block; animation: wg-wob 1.2s ease-in-out infinite; }
+.wings .wk { margin-top: 14px; font-size: 12px; font-weight: 700; letter-spacing: .16em; color: #FFB020; text-transform: uppercase; }
+.wings h2 { margin: 6px 0 8px; font-size: 26px; line-height: 1.15; letter-spacing: -.03em; }
+.wings p { margin: 0 0 18px; color: var(--ink2, #AEB7BD); font-size: 15px; line-height: 1.45; }
+.wings button { min-height: 46px; padding: 0 22px; border: 0; border-radius: 23px; background: #FFB020; color: #1A1200; font-weight: 800; font-size: 15px; }
+.wings .we, .wings .wk, .wings h2, .wings p, .wings button { position: relative; z-index: 1; }
+.wings i { z-index: 0; opacity: .85; position: absolute; top: -12px; width: 8px; height: 14px; border-radius: 2px; animation: wg-fall linear forwards; }
+@keyframes wg-in { from { opacity: 0; } } @keyframes wg-pop { from { transform: scale(.6); opacity: 0; } } @keyframes wg-wob { 50% { transform: rotate(-14deg) scale(1.08); } }
+@keyframes wg-fall { to { transform: translateY(620px) rotate(720deg); opacity: .2; } }
+@media (prefers-reduced-motion: reduce) { .wings * { animation: none !important; } }

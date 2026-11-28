@@ -70,6 +70,10 @@ iOS 27 lays a hazy glass over the top of home-screen web apps. On an iPhone or i
 ## The job comes by itself (2.14)
 With the key and team password in (⋮ › Your actions; on the demo it's ⋮ › **Connect to BTC**, first in the list, 2.14.1), the phone looks in btc-drop's `projects/` folder, opens each `.btcpack` with the team password and loads the job it finds over the demo (several: it asks which), then asks who you are. Build sends it (`projects/<job hash>.btcpack`, the project file locked like a pack) when someone makes it (⋮ › Phone project file…) and by itself when anything in it changed; the phone checks for a newer one every 10 minutes at most when it opens, and takes it without touching your days. **Load project…** still works for a file, and now takes any file (an iPhone greys out `.btcproject` otherwise); the app checks it.
 
+## Wings Friday (2.20)
+
+Every Friday from 11:00 one person in M&E is drawn to buy everyone chicken wings, in either mode. The draw comes from the week and the team's initials (no server), so every phone and BTC on the PC show the same person, and nobody pays twice before everyone has paid once. Shown once per Friday to M&E (and All teams), never in the demo.
+
 ## Commissioning mode (2.19)
 
 ⋮ › **Commissioning mode** (shown to people in a team whose apps include Commission, everyone in a job without teams, and in the demo). The phone goes green: a ring round the screen, the **COMMISSIONING** band and the **CX** chip; tap either to switch back. It stays on until you do, even after the app is closed.

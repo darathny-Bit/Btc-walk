@@ -5,7 +5,7 @@
    BTC), or by hand from the project file Build makes (⋮ › Load project). Nothing goes anywhere else. */
 'use strict';
 (function () {
-  var VERSION = '2.19';
+  var VERSION = '2.20';
   // iPhone (2.16.1): iOS 27 lays a frozen glass blur over the top of home-screen web apps, so on an iPhone or iPad the top
   // bar is taller, its buttons shifted down below the haze. Undo with the 'ios' class.
   if (/iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) document.documentElement.classList.add('ios');
@@ -1576,7 +1576,54 @@
     } catch (e) { /* reload anyway */ }
     location.reload();
   }
-  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') { checkUpdate(); wxFetch(); packsLoad(true); shipLater(); } });
+  // ---------- Wings Friday (2.20, an Easter egg) ----------
+  // Every Friday from 11:00 one person in the M&E team is drawn to buy everyone chicken wings, in either mode. The draw is
+  // worked out from the week and the team's initials, so every phone and PC gets the same person: BTC's top bar has the
+  // same code (wingsPick), kept in step by hand. Nobody pays twice before everyone has paid once. Shown once per Friday to
+  // people in M&E (and All teams); a job without teams draws from everyone. Not in the demo. BTCWalk.wings(true) shows it now.
+  function wingsHash(t) { var h = 2166136261; for (var i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+  function wingsRand(a) { return function () { a = (a + 0x6D2B79F5) | 0; var t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+  function wingsPick(pool, day) {   // pool: initials; day: 'YYYY-MM-DD' (a Friday)
+    pool = pool.map(function (x) { return String(x).toUpperCase(); }).filter(function (x, i, a) { return x && a.indexOf(x) === i; }).sort();
+    if (!pool.length) return '';
+    var d = day.split('-'), w = Math.round((Date.UTC(+d[0], +d[1] - 1, +d[2]) - Date.UTC(2026, 0, 2)) / 6048e5), n = pool.length;
+    var round = Math.floor(w / n), r = wingsRand(wingsHash('wings|' + round + '|' + pool.join(','))), o = pool.slice();
+    for (var i = o.length - 1; i > 0; i--) { var j = Math.floor(r() * (i + 1)), t = o[i]; o[i] = o[j]; o[j] = t; }
+    return o[((w % n) + n) % n];
+  }
+  function wingsCheck(force) {
+    try {
+      var p = S.proj; if (!p || (p.demo && !force) || !S.me) return;
+      var now = new Date(), day = today();
+      if (!force && (now.getDay() !== 5 || now.getHours() < 11)) return;
+      if (!force && localStorage.getItem('btc.wings:' + p.project.id) === day) return;
+      var ts = p.teams || [], first = ts[0] ? ts[0].id : '';
+      var mE = ts.length ? ts.filter(function (t) { return /^m\s*&?\s*e$/i.test(String(t.name).trim()) || t.id === 'me'; })[0] || ts.filter(function (t) { return (t.apps || []).indexOf('commission') >= 0; })[0] || null : null;
+      var people = (p.people || []).filter(function (x) { return x.team !== false; });
+      var inM = function (x) { return !ts.length || (x.group || first) === (mE && mE.id); };
+      var pool = people.filter(function (x) { return x.group !== 'all' && inM(x); }).map(function (x) { return x.handle; });
+      var mine = people.filter(function (x) { return x.handle === S.me.handle; })[0];
+      if (!pool.length || (ts.length && !mE) || (!force && !(mine && (mine.group === 'all' || inM(mine))))) return;
+      var who = wingsPick(pool, day), w = people.filter(function (x) { return String(x.handle).toUpperCase() === who; })[0] || { handle: who, name: who };
+      try { localStorage.setItem('btc.wings:' + p.project.id, day); } catch (e) { /* fine */ }
+      wingsShow(w, who === String(S.me.handle).toUpperCase());
+    } catch (e) { /* an Easter egg never gets in the way */ }
+  }
+  function wingsShow(w, you) {
+    if ($('wings')) return;
+    var nm = esc(w.name || w.handle), first = esc(String(w.name || w.handle).split(' ')[0]), cols = ['#FFB020', '#FF6A3D', '#3DDC84', '#5CB8FF', '#B595FF', '#F2F4F5'], conf = '';
+    for (var k = 0; k < 46; k++) conf += '<i style="left:' + Math.round(Math.random() * 100) + '%;background:' + cols[k % cols.length] + ';animation-duration:' + (1.6 + Math.random() * 1.8).toFixed(2) + 's;animation-delay:' + (Math.random() * .6).toFixed(2) + 's"></i>';
+    var ov = document.createElement('div'); ov.id = 'wings'; ov.className = 'wings'; ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-label', 'Wings Friday');
+    ov.innerHTML = '<div class="wc">' + conf + '<div class="we" aria-hidden="true">🍗</div><div class="wk">Wings Friday</div>' +
+      (you ? '<h2>Congratulations, ' + first + '!</h2><p>You’re buying everyone chicken wings. Wallet out.</p><button type="button">Fine 😩</button>'
+        : '<h2>Congratulations, ' + nm + '!</h2><p>' + first + ' is buying everyone chicken wings today.</p><button type="button">Ha. Cheers ' + first + '</button>') + '</div>';
+    document.body.appendChild(ov); buzz([30, 60, 30, 60, 120]);
+    var close = function () { ov.remove(); };
+    ov.querySelector('button').onclick = close; ov.addEventListener('click', function (e) { if (e.target === ov) close(); });
+  }
+  setTimeout(function () { wingsCheck(false); }, 2500);
+  setInterval(function () { if (document.visibilityState === 'visible') wingsCheck(false); }, 60000);
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') { checkUpdate(); wxFetch(); packsLoad(true); shipLater(); wingsCheck(false); } });
   setInterval(function () { if (document.visibilityState === 'visible') checkUpdate(); }, 600000);
 
   // ---------- start ----------
@@ -1641,5 +1688,5 @@
     var fit = function () { var v = window.visualViewport; document.body.style.height = v.height + 'px'; document.body.style.transform = v.offsetTop ? 'translateY(' + v.offsetTop + 'px)' : ''; };
     window.visualViewport.addEventListener('resize', fit); window.visualViewport.addEventListener('scroll', fit); fit();
   }
-  window.BTCWalk = { parse: parse, state: S, version: VERSION, loadProjectFile: loadProjectFile };
+  window.BTCWalk = { parse: parse, state: S, version: VERSION, loadProjectFile: loadProjectFile, wings: wingsCheck, wingsPick: wingsPick };
 })();
