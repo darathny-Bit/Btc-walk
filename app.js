@@ -5,7 +5,7 @@
    BTC), or by hand from the project file Build makes (⋮ › Load project). Nothing goes anywhere else. */
 'use strict';
 (function () {
-  var VERSION = '2.23';
+  var VERSION = '2.24';
   // iPhone (2.16.1): iOS 27 lays a frozen glass blur over the top of home-screen web apps, so on an iPhone or iPad the top
   // bar is taller, its buttons shifted down below the haze. Undo with the 'ios' class.
   if (/iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) document.documentElement.classList.add('ios');
@@ -277,6 +277,12 @@
   // No Ship (2.21): today closes with Close Day, an earlier day with "Close Fri 27", and a closed day that changes sends
   // itself (BTC gives the reviewer a card to sign again, with only what changed). ⋮ › Send now still sends part-way.
   function closedDay(d) { return !!(S.closed || {})[d]; }
+  // A day's state in words (2.24): no "shipped" any more. Actions go to BTC as you type; the diary goes with Close Day.
+  function dayWord(d, un) {
+    if ((S.waitSig || []).indexOf(d) >= 0) return 'Waiting for signal';
+    if (closedDay(d)) return un ? 'Sending the change' : 'Closed ✓';
+    return d === today() ? 'Live' : 'Open';
+  }
   function toClose(ds, t) { var lim = addDays(t, -14); return ds.filter(function (d) { return d.day < t && d.day >= lim && !closedDay(d.day) && d.entries.some(function (e) { return e.type !== 'weather'; }); }); }
   var TICK = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>';
   function monday(d) { var x = dayDate(d), k = (x.getDay() + 6) % 7; x.setDate(x.getDate() - k); return ymd(x); }
@@ -308,7 +314,7 @@
         (d.unshipped && closedDay(d.day) ? RESHIP : isT ? (closedDay(d.day) ? '<span class="tag sent">' + TICK + ' Closed</span>' : '<span class="tag live">Live</span>') : closedDay(d.day) ? '<span class="tag sent">' + TICK + ' Closed</span>' : d.unshipped ? FLAG : '<span class="tag sent">' + TICK + ' Sent</span>') + '</span>' + dotsRow(c) + '</span></button>';
     };
     if (recent.length) html += '<div class="kick">This week</div>' + recent.map(card).join('');
-    if (earlier.length) html += S.showEarlier ? '<div class="kick">Earlier</div>' + earlier.map(card).join('') : '<button type="button" class="day" data-act="earlier"><span class="muted small">Earlier · ' + earlier.length + ' day' + (earlier.length > 1 ? 's' : '') + (earlier.some(function (d) { return d.unshipped; }) ? '' : ', all sent') + ' ▸</span></button>';
+    if (earlier.length) html += S.showEarlier ? '<div class="kick">Earlier</div>' + earlier.map(card).join('') : '<button type="button" class="day" data-act="earlier"><span class="muted small">Earlier · ' + earlier.length + ' day' + (earlier.length > 1 ? 's' : '') + (toClose(earlier, today()).length ? '' : ', all closed') + ' ▸</span></button>';
     if (!ds.length) html += '<div class="empty"><b>Nothing logged yet.</b><br>Start the day and type: a note, a photo, a clash (<b>what changed ; what next</b>) or an action (<b>@person</b>). A day you don’t log anything has no card.</div>';
     var hasT = ds.some(function (d) { return d.day === t; });
     var sc0 = main.querySelector('.scroll'), keepY = sc0 && sc0.querySelector('.hello') ? sc0.scrollTop : 0;   // a redraw keeps your place (2.12)
@@ -375,7 +381,7 @@
     var un = es.some(function (e) { return !e.shipped; });
     var loc = S.loc ? (S.loc.itp ? (S.loc.area ? S.loc.area + ' · ' : '') + S.loc.itp : S.loc.name) : '';
     main.innerHTML = '<div class="dhead"><button type="button" class="icon" data-act="back" aria-label="Back to days"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>' +
-      '<span class="t"><b>' + (d === today() ? 'Today · ' : '') + esc(dayLabel(d)) + '</b><span>' + esc(S.proj.project.code || '') + ' · ' + es.length + ' line' + (es.length === 1 ? '' : 's') + ' · ' + (es.length ? (un ? 'not shipped' : 'sent') : 'nothing yet') + '</span></span>' +
+      '<span class="t"><b>' + (d === today() ? 'Today · ' : '') + esc(dayLabel(d)) + '</b><span>' + esc(S.proj.project.code || '') + ' · ' + es.length + ' line' + (es.length === 1 ? '' : 's') + ' · ' + (es.length ? dayWord(d, un) : 'nothing yet') + '</span></span>' +
       '<button type="button" class="icon" data-act="compileday" aria-label="Compile this day" title="Compile this day"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 12h7M9 16h7"/></svg></button>' +
       '<button type="button" class="icon' + (S.findOpen ? ' on' : '') + '" data-act="findday" aria-label="Search this day"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg></button></div>' +
       (S.findOpen ? '<div class="findbar"><input type="search" id="find-day" placeholder="Search this day" value="' + esc(S.find) + '" aria-label="Search this day"><span>' + (q ? shown.length + ' of ' + es.length : '') + '</span></div>' : '') +
@@ -529,7 +535,7 @@
       '<div class="filters">' + [['all', 'All'], ['photo', 'Photos'], ['note', 'Notes'], ['flowon', 'Clashes'], ['action', 'Actions'], ['itp', 'ITP']].concat(S.cx || S.entries.some(function (e) { return e.cx; }) ? [['force', 'Forces']] : []).map(function (x) { return '<button type="button" data-filter="' + x[0] + '"' + (f === x[0] ? ' class="on"' : '') + '>' + x[1] + '</button>'; }).join('') + '</div>' +
       '<div class="scroll"><div class="pad" style="gap:0">' + (q || f !== 'all' ? '<div class="kick" style="padding-bottom:6px">' + es.length + ' line' + (es.length === 1 ? '' : 's') + ' on ' + days.length + ' day' + (days.length === 1 ? '' : 's') + '</div>' : '') +
       days.map(function (d) {
-        return '<div class="res-day">' + (d === today() ? 'Today · ' : '') + esc(dayLabel(d)) + (un[d] && d !== today() ? ' <span class="tag" style="color:var(--flow-ink)">Not shipped</span>' : '') + '</div>' + byDay[d].map(function (e) {
+        return '<div class="res-day">' + (d === today() ? 'Today · ' : '') + esc(dayLabel(d)) + (d !== today() && !closedDay(d) ? ' <span class="tag" style="color:var(--flow-ink)">Open</span>' : '') + '</div>' + byDay[d].map(function (e) {
           var dot = e.type === 'flowon' ? 'dot-f' : e.type === 'force' ? 'dot-x' : e.type === 'tagphoto' ? 'dot-t' : e.type === 'action' ? 'dot-a' : e.type === 'itp' ? 'dot-i' : 'dot-n', hlq = q && q.charAt(0) !== '@' ? q : '';
           var mk = function (s) { s = esc(s); if (!hlq) return s; return s.replace(new RegExp('(' + esc(hlq.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) + ')', 'ig'), '<mark>$1</mark>'); };
           var where = e.itp ? (e.area ? e.area + ' · ' : '') + e.itp : e.area || e.tag || '';
@@ -788,7 +794,7 @@
       (list.length ? '<div class="pas">' + show.map(row).join('') + (list.length > 4 ? '<button type="button" class="pa-more" data-act="packall">' + (S.packAll ? 'Show fewer' : 'All ' + list.length) + '</button>' : '') + '</div>' : S.pack ? '<div class="allclear"><div><b>Nothing open</b><span>No actions or chases for you in BTC.</span></div></div>' : '') +
       (list.length ? '<div class="pa-hint">Tap to open · swipe right: done · left: pass on</div>' : '') +
       (function () { var w = (S.packDone || []).filter(function (d) { return !d.sent; }), nd = w.filter(function (d) { return !d.to; }).length, np = w.length - nd;
-        return w.length ? '<div class="bar-info">' + [nd ? nd + ' done' : '', np ? np + ' passed on' : ''].filter(Boolean).join(', ') + ' here · ' + ((S.packCfg || {}).key ? 'goes to BTC as soon as there’s signal' : 'goes to BTC with your next ship') + '</div>' : ''; })();
+        return w.length ? '<div class="bar-info">' + [nd ? nd + ' done' : '', np ? np + ' passed on' : ''].filter(Boolean).join(', ') + ' here · ' + ((S.packCfg || {}).key ? 'goes to BTC as soon as there’s signal' : 'goes to BTC when you close the day') + '</div>' : ''; })();
   }
   function packsSettings() {
     var c = S.packCfg || {};
@@ -806,7 +812,7 @@
     var lines = ev.filter(function (e) { return e.itp && e.line; }).map(function (e) { return e.itp + ' ' + e.line; }).filter(function (x, i, a) { return a.indexOf(x) === i; });
     var who = {}; es.forEach(function (e) { if (e.type === 'action') String(e.who || 'you').split(/\s+/).forEach(function (h) { who[S.me && h === S.me.handle ? 'you' : h] = 1; }); });
     var row = function (col, label, sub, n) { return n ? '<div><span class="dotl" style="background:' + col + '"></span><span class="lt"><b>' + label + '</b>' + (sub ? '<span>' + esc(sub) + '</span>' : '') + '</span><span class="rv">' + n + '</span></div>' : ''; };
-    sheet('<div class="grip"></div><div class="shipped"><div class="tickc"><svg width="54" height="54" viewBox="0 0 52 52" role="img" aria-label="Shipped"><circle class="ring-d" cx="26" cy="26" r="23" fill="none" stroke="#D4FF3A" stroke-width="3"/><path class="tick-d" d="M15 27l7 7 15-16" fill="none" stroke="#D4FF3A" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>' +
+    sheet('<div class="grip"></div><div class="shipped"><div class="tickc"><svg width="54" height="54" viewBox="0 0 52 52" role="img" aria-label="Sent"><circle class="ring-d" cx="26" cy="26" r="23" fill="none" stroke="#D4FF3A" stroke-width="3"/><path class="tick-d" d="M15 27l7 7 15-16" fill="none" stroke="#D4FF3A" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>' +
       '<h2>' + (S.justClosed ? 'Day closed' : 'Sent') + '</h2><p>' + (S.sentDirect ? '<b>Sent straight to BTC.</b> ' : '') + (S.justClosed ? 'Signed and on the way to BTC' + (S.justClosed.reviewer ? ', where ' + esc(S.justClosed.reviewer) + ' gets it to review and sign' : '') + '.<br>' : '') + (pick.length === 1 ? (pick[0].day === today() ? 'Today' : esc(dayLabel(pick[0].day))) + ' is' : pick.length + ' days are') + ' on the way to BTC.<br>It lands in your diary on the PC, and stays on this phone too.</p></div>' +
       '<div class="list">' + row('var(--note)', 'Notes', '', c.note) + row('var(--itp)', 'ITP evidence', evp ? evp + ' photo' + (evp === 1 ? '' : 's') + (lines.length ? ' → ' + lines.slice(0, 2).join(', ') + (lines.length > 2 ? '…' : '') : ' to sort on the PC') : '', c.itp) +
       row('var(--flow)', 'Clashes', 'to Build’s register', c.flowon) + row('var(--act)', 'Actions', 'cards for ' + Object.keys(who).join(', '), c.action) + '</div>' +
@@ -841,11 +847,11 @@
     else {
       try { if (await dropSend(body, name)) shared = 'drop'; else { if (!opt.auto) { closeSheet(); toast('Set up sending first: ⋮ › Connect to BTC (the key and team password).', true); } return; } }
       catch (e0) {
-        await kvSet('shipLater:' + S.proj.project.id, { days: Object.keys(pickDays), close: CL || null, at: new Date().toISOString(), why: e0.message });
+        await kvSet('shipLater:' + S.proj.project.id, { days: Object.keys(pickDays), close: CL || null, at: new Date().toISOString(), why: e0.message }); S.waitSig = Object.keys(pickDays);
         if (!opt.auto) { closeSheet(); toast((navigator.onLine ? 'Couldn’t reach BTC (' + e0.message + ')' : 'No signal') + ': it goes by itself as soon as it can.', true); } return;
       }
     }
-    await kvSet('shipLater:' + S.proj.project.id, null);
+    await kvSet('shipLater:' + S.proj.project.id, null); S.waitSig = [];
     var at = new Date().toISOString();
     if (CL) { S.closed = Object.assign({}, S.closed || {}); S.closed[CL.date] = CL.at; await kvSet('closed:' + S.proj.project.id, S.closed); if (CL.reviewer) await kvSet('reviewer:' + S.proj.project.id, CL.reviewer); S.closeReq = null; }
     for (var i = 0; i < es.length; i++) { es[i].shipped = true; es[i].shippedAt = at; await putEntry(es[i]); }
@@ -984,7 +990,7 @@
       (canCx() ? '<button type="button" data-act="cxset"><span class="lt"><b>Commissioning mode: ' + (S.cx ? 'on' : 'off') + '</b><span>' + (S.cx ? 'Forces and tag photos go to Commission' : 'For commissioning: forces to Commission, photos to the tag') + '</span></span></button>' : '') +
       '<button type="button" data-act="wxset"><span class="lt"><b>Weather: ' + (wxOn() ? 'on' : 'off') + '</b><span>' + (wxOn() ? 'Forecast from MET Norway' + (siteLoc() ? '' : ' · set the site location') : 'Fill in each day’s weather from MET Norway') + '</span></span></button>' +
       (p.demo ? '' : '<button type="button" data-act="demo"><span class="lt"><b>Try the demo</b><span>A made-up job to practise on. Your job’s lines stay on the phone.</span></span></button>') + '</div>' +
-      '<div class="sec">On this phone</div>' + (function () { var o = oldShipped(); return o.length ? '<div class="list"><button type="button" data-act="clearold"><span class="lt"><b>Free up space</b><span>Clear ' + o.length + ' shipped line' + (o.length === 1 ? '' : 's') + ' older than a month (' + (JSON.stringify(o).length / 1048576).toFixed(1) + ' MB). They’re safe in BTC.</span></span></button></div>' : ''; })() + '<p>' + n + ' line' + (n === 1 ? '' : 's') + ' for this job. Lines stay on this phone until you close the day; actions go to BTC straight away. Keep BTC Walk on your Home Screen (Safari › Share › Add to Home Screen) so the phone keeps them.</p>' +
+      '<div class="sec">On this phone</div>' + (function () { var o = oldShipped(); return o.length ? '<div class="list"><button type="button" data-act="clearold"><span class="lt"><b>Free up space</b><span>Clear ' + o.length + ' line' + (o.length === 1 ? '' : 's') + ' in BTC, older than a month (' + (JSON.stringify(o).length / 1048576).toFixed(1) + ' MB). They’re safe in BTC.</span></span></button></div>' : ''; })() + '<p>' + n + ' line' + (n === 1 ? '' : 's') + ' for this job. Lines stay on this phone until you close the day; actions go to BTC straight away. Keep BTC Walk on your Home Screen (Safari › Share › Add to Home Screen) so the phone keeps them.</p>' +
       '<div class="sec">How to write</div><p><b>plinth moved 25 mm ; shop drawing 25 mm shorter</b> is a clash (or use --). <b>@NH</b> makes it NH’s action; <b>P0</b> (works stopped) to <b>P3</b>, <b>fri</b>, <b>28-11</b> set priority and due. <b>lesson.</b> adds a lesson learnt. <b>@SBR 1</b> or <b>@ITP-06</b> tags where it is; <b>at SBR 1</b> on its own moves you there. Tap <b>LOG AS</b> to change the type.</p>' +
       '<div class="sec">This app</div><div class="list"><button type="button" data-act="checkupd"><span class="lt"><b>BTC Walk ' + esc(VERSION) + '</b><span>' + (upd.seen && upd.seen !== VERSION ? 'Version ' + esc(upd.seen) + ' is out: tap to check again' : 'Check for an update') + '</span></span></button></div>');
   }
@@ -1045,7 +1051,7 @@
         return '<button type="button" class="evrow" data-ev="' + esc(x.it.code) + '">' + ring(done, ls.length, 36) + '<span class="tx"><b>' + esc(x.it.code) + '</b> ' + esc(x.it.title || '') + '<small>' + esc(x.area) + ' · ' + done + ' of ' + ls.length + ' lines</small></span><span class="n' + (n ? '' : ' none') + '">' + (n ? n + ' photo' + (n === 1 ? '' : 's') : 'none yet') + '</span></button>';
       }).join('');
       var loose = S.entries.filter(function (e) { return e.type === 'itp' && !(e.itp && e.line); });
-      if (loose.length) html += '<div class="kick">To sort on the PC</div><div class="bar-info">' + loose.length + ' ITP photo line' + (loose.length === 1 ? '' : 's') + ' logged without an ITP line. Build sorts them when you ship.</div>';
+      if (loose.length) html += '<div class="kick">To sort on the PC</div><div class="bar-info">' + loose.length + ' ITP photo line' + (loose.length === 1 ? '' : 's') + ' logged without an ITP line. Build sorts them once the day is closed.</div>';
       if (!html) html = '<div class="empty"><b>No ITP evidence yet.</b><br>Log a photo with <b>@ITP-06 3.2</b> (or start with <b>ITP.</b>) and it shows up here by line.</div>';
       else if (!any) html = '<div class="bar-info">Log a photo with <b>@ITP-06 3.2</b> and it lands on that line here.</div>' + html;
     } else {
@@ -1137,7 +1143,7 @@
       (numbered.length ? '<p class="pp-note">' + (numbered.length === 1 ? 'P1 is' : 'P1–P' + numbered.length + ' are') + ' printed full size after the sign-off.</p>' : '') + sgn +
       (numbered.length || other.length ? '<div class="pp-photos"><h2>Photos</h2>' + numbered.map(function (x) { return '<figure><span><img src="' + x.src + '" alt=""><b>' + x.n + '</b></span><figcaption><b>' + x.n + '</b> · ' + esc(x.cap) + '</figcaption></figure>'; }).join('') +
         (other.length ? '<h2>Other photos from the day</h2><div class="pp-ph">' + other.map(function (x) { return '<img src="' + x.src + '" alt="">'; }).join('') + '</div>' : '') + '</div>' : '') +
-      '<div class="pp-foot">Compiled ' + esc(dayLabel(today())) + ' ' + hm(new Date().toISOString()) + ' from BTC Walk' + (es.some(function (e) { return !e.shipped; }) ? ' · not all lines shipped to BTC yet' : '') + '</div></div>';
+      '<div class="pp-foot">Compiled ' + esc(dayLabel(today())) + ' ' + hm(new Date().toISOString()) + ' from BTC Walk' + (closedDay(S.day) ? '' : ' · day still open') + '</div></div>';
     if (S.view !== 'dayprint') return;
     main.innerHTML = '<div class="dhead noprint"><button type="button" class="icon" data-act="back" aria-label="Back to the day"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>' +
       '<span class="t"><b>Compile this day</b><span>' + esc(dayLabel(d)) + ' · ' + esc(tot) + '</span></span></div><div class="scroll"><div class="pad pp-wrap">' + html + '</div></div>' +
@@ -1165,9 +1171,9 @@
   // ---------- free up space (2.0) ----------
   function oldShipped() { var cut = addDays(today(), -30); return S.entries.filter(function (e) { return e.shipped && e.day < cut; }); }
   async function clearOld() {
-    var es = oldShipped(); if (!es.length) { toast('Nothing to clear: no shipped days older than a month.'); return; }
+    var es = oldShipped(); if (!es.length) { toast('Nothing to clear: nothing in BTC older than a month.'); return; }
     var mb = JSON.stringify(es).length / 1048576;
-    if (!confirm('Clear ' + es.length + ' shipped line' + (es.length === 1 ? '' : 's') + ' older than a month (' + mb.toFixed(1) + ' MB)? They’re safe in BTC, but they’ll be gone from this phone.')) return;
+    if (!confirm('Clear ' + es.length + ' line' + (es.length === 1 ? '' : 's') + ' older than a month (' + mb.toFixed(1) + ' MB)? They’re safe in BTC, but they’ll be gone from this phone.')) return;
     for (var i = 0; i < es.length; i++) await delEntry(es[i].id);
     var ids = {}; es.forEach(function (e) { ids[e.id] = 1; }); S.entries = S.entries.filter(function (e) { return !ids[e.id]; });
     closeSheet(); render(); toast('Cleared ' + es.length + ' line' + (es.length === 1 ? '' : 's') + ' (' + mb.toFixed(1) + ' MB).');
@@ -1514,7 +1520,7 @@
       c0.pass = p0; await kvSet('packs', c0); S.packCfg = c0; closeSheet(); toast('Getting your job from BTC…'); await projSync(true); if (!S.me || S.proj.demo) return; await packsLoad(false); if (S.pack && !S.packErr) toast(packList().length + ' open for you');
     }
     else if (act === 'wxon') { S.wx = Object.assign(S.wx || {}, { on: true, acceptedAt: new Date().toISOString() }); await kvSet('wx', S.wx); wxSettings(); if (!siteLoc()) toast('Now set the site location: tap “Use where this phone is now” on site.'); else wxFetch(true); }
-    else if (act === 'wxtry') { if (!navigator.onLine) { toast('No signal: try again when you have some.', true); return; } toast('Getting the forecast…'); var okw = await wxFetch(true); wxSettings(); toast(okw ? 'Forecast in. ' + (Object.keys(S.wxOwed || {}).length ? 'Ship to send it to BTC.' : 'BTC has it.') : (S.wx.err || 'No forecast') + '.', !okw); }
+    else if (act === 'wxtry') { if (!navigator.onLine) { toast('No signal: try again when you have some.', true); return; } toast('Getting the forecast…'); var okw = await wxFetch(true); wxSettings(); toast(okw ? 'Forecast in. ' + (Object.keys(S.wxOwed || {}).length ? 'It goes to BTC with Close Day.' : 'BTC has it.') : (S.wx.err || 'No forecast') + '.', !okw); }
     else if (act === 'wxoff') { S.wx.on = false; await kvSet('wx', S.wx); wxSettings(); }
     else if (act === 'wxhere') {
       if (!navigator.geolocation) { toast('This phone can’t share its location here.', true); return; }
@@ -1559,7 +1565,7 @@
     else if (act === 'delete') { var dl = S.edit; var gel = document.querySelector('[data-e="' + dl + '"]'); if (gel && MOTION) { gel.style.height = gel.offsetHeight + 'px'; void gel.offsetWidth; gel.classList.add('gone'); await new Promise(function (r) { setTimeout(r, 200); }); } var dx = S.entries.filter(function (x) { return x.id === dl; })[0]; S.entries = S.entries.filter(function (x) { return x.id !== dl; }); await delEntry(dl);
       if (dx && dx.shippedAt) { S.gone = (S.gone || []).concat([{ id: dl, day: dx.day }]); await kvSet('gone:' + S.proj.project.id, S.gone); S.lastEdit = Date.now(); }   // shipped already: BTC takes it out next ship
       S.edit = null; S.photos = []; renderDay(); buzz(6);
-      toast(dx && dx.shippedAt ? 'Deleted. Ship again to take it out of BTC.' : 'Deleted', false, dx ? { label: 'Undo', fn: async function () {
+      toast(dx && dx.shippedAt ? (closedDay(dx.day) ? 'Deleted. It comes out of BTC by itself.' : 'Deleted. It’s out of BTC when you close the day.') : 'Deleted', false, dx ? { label: 'Undo', fn: async function () {
         S.entries.push(dx); await putEntry(dx);
         if (dx.shippedAt) { S.gone = (S.gone || []).filter(function (g) { return g.id !== dx.id; }); await kvSet('gone:' + S.proj.project.id, S.gone); }
         if (S.view === 'day') renderDay();

@@ -2,7 +2,7 @@
 
 A site diary on your phone. Open it and type: notes, photos, clashes and actions all go into the day's one chat. When you're done, **Close Day** sends the day straight to BTC through btc-drop (actions go on their own as soon as you type them), and BTC files it into your site diary.
 
-Everything stays on the phone until you ship. There's no server and no account: the app is static files, and your lines live in the phone's own storage.
+Actions go to BTC as you type them; the rest of the day (notes, clashes, ITP evidence, photos, weather) stays on the phone until you close the day. There's no server and no account: the app is static files, and your lines live in the phone's own storage.
 
 ## Install
 Open **https://darathny-bit.github.io/Btc-walk/** on the phone, then:
@@ -69,6 +69,10 @@ iOS 27 lays a hazy glass over the top of home-screen web apps. On an iPhone or i
 
 ## The job comes by itself (2.14)
 With the key and team password in (⋮ › Your actions; on the demo it's ⋮ › **Connect to BTC**, first in the list, 2.14.1), the phone looks in btc-drop's `projects/` folder, opens each `.btcpack` with the team password and loads the job it finds over the demo (several: it asks which), then asks who you are. Build sends it (`projects/<job hash>.btcpack`, the project file locked like a pack) when someone makes it (⋮ › Phone project file…) and by itself when anything in it changed; the phone checks for a newer one every 10 minutes at most when it opens, and takes it without touching your days. **Load project…** still works for a file, and now takes any file (an iPhone greys out `.btcproject` otherwise); the app checks it.
+
+## No more "shipped" (2.24)
+
+A day says **Live** (today), **Open** (an earlier day not closed), **Closed ✓**, **Sending the change** or **Waiting for signal**. Nothing says shipped any more: actions go as you type, the rest with Close Day (⋮ › Send now still sends early).
 
 ## P0 and lessons (2.23)
 
